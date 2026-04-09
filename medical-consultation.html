@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI医疗问诊助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=cf14cba96b028f025d7514e3a12663f6"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes typing { 0%,60%,100%{ transform:translateY(0) } 30%{ transform:translateY(-10px) } }
+        @keyframes shimmer { 0%{ background-position: -200% 0 } 100%{ background-position: 200% 0 } }
+        @keyframes float { 0%,100%{ transform:translate(0,0) } 50%{ transform:translate(-15px,-20px) } }
+        @keyframes emergencyPulse { 0%,100%{ box-shadow:0 0 0 0 rgba(239,68,68,0.4) } 50%{ box-shadow:0 0 0 20px rgba(239,68,68,0) } }
+        @keyframes slideUp { from { opacity:0; transform:translateY(30px) } to { opacity:1; transform:translateY(0) } }
+        .msg-enter { animation: fadeIn .3s ease-in; }
+        .typing-dot { animation: typing 1.4s infinite; }
+        .typing-dot:nth-child(2) { animation-delay: .2s; }
+        .typing-dot:nth-child(3) { animation-delay: .4s; }
+        .btn-ghost { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); transition: all .2s ease; }
+        .btn-ghost:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.18); }
+        .card-dark { background: rgba(26,26,26,0.75); backdrop-filter: blur(40px) saturate(1.2); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06); }
+        .bubble-ai { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+        .bubble-user { background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid rgba(255,255,255,0.12); }
+        .gradient-text { background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.6) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .shimmer-line { background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 3s infinite; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+        .modal-backdrop { backdrop-filter: blur(8px); }
+        .ambient-orb { position: absolute; border-radius: 50%; filter: blur(120px); pointer-events: none; }
+        .input-glow:focus { box-shadow: 0 0 0 1px rgba(255,255,255,0.15), 0 2px 16px rgba(0,0,0,0.3); }
+        .send-btn { background: #ffffff; color: #000000; transition: all .2s ease; }
+        .send-btn:hover:not(:disabled) { background: rgba(255,255,255,0.9); box-shadow: 0 0 20px rgba(255,255,255,0.15); transform: scale(1.05); }
+        .send-btn:active:not(:disabled) { transform: scale(0.95); }
+        .send-btn:disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.3); cursor: not-allowed; }
+        .progress-track { background: rgba(255,255,255,0.08); }
+        .progress-fill { background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.7)); }
+        .form-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); transition: all .2s ease; }
+        .form-input:focus { border-color: rgba(255,255,255,0.25); box-shadow: 0 0 0 1px rgba(255,255,255,0.1); outline: none; }
+        .form-input::placeholder { color: rgba(255,255,255,0.25); }
+        .form-label { color: rgba(255,255,255,0.6); font-size: 0.8rem; font-weight: 500; }
+        .emergency-btn { animation: emergencyPulse 1.5s infinite; }
+        .emergency-card { animation: slideUp .3s ease-out; }
+        .voice-active { background: rgba(255,255,255,0.18) !important; border-color: rgba(255,255,255,0.28) !important; box-shadow: 0 0 0 4px rgba(255,255,255,0.06); }
+        .image-chip { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+        .upload-preview { max-width: 180px; max-height: 180px; border-radius: 12px; object-fit: cover; border: 1px solid rgba(255,255,255,0.08); }
+        @media print {
+            body * { visibility: hidden; }
+            #reportModal, #reportModal * { visibility: visible; }
+            #reportModal { position: absolute; left: 0; top: 0; width: 100%; }
+            #reportModal > div { box-shadow: none !important; border: none !important; }
+        }
+        @media (max-width: 640px) {
+            #hospitalModal .flex { flex-direction: column; }
+            #hospitalModal .w-1\/2 { width: 100%; min-width: unset; }
+            #amapContainer { min-height: 250px; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 font-['Inter','Segoe_UI','Microsoft_YaHei',sans-serif] overflow-hidden relative" style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0f0f0f 50%, #181818 75%, #0a0a0a 100%);">
+
+    <!-- 黑白渐变背景 -->
+    <div class="fixed inset-0 z-0 pointer-events-none">
+        <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.08) 100%);"></div>
+        <div class="absolute inset-0" style="background: linear-gradient(225deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(255,255,255,0.05) 100%);"></div>
+        <div class="absolute inset-0" style="background: linear-gradient(45deg, transparent 20%, rgba(255,255,255,0.06) 60%, transparent 100%);"></div>
+        <div class="absolute top-[-20%] right-[-15%] w-[800px] h-[800px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 30%, transparent 70%); filter: blur(60px); animation: float 10s ease-in-out infinite;"></div>
+        <div class="absolute bottom-[-15%] left-[-10%] w-[700px] h-[700px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.06) 35%, transparent 70%); filter: blur(60px); animation: float 12s ease-in-out infinite 2s;"></div>
+        <div class="absolute top-[25%] left-[5%] w-[500px] h-[500px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 40%, transparent 70%); filter: blur(50px); animation: float 11s ease-in-out infinite 1s;"></div>
+        <div class="absolute top-[10%] left-[40%] w-[450px] h-[450px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 45%, transparent 70%); filter: blur(50px); animation: float 9s ease-in-out infinite 3s;"></div>
+        <div class="absolute bottom-[15%] right-[20%] w-[550px] h-[550px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 40%, transparent 70%); filter: blur(55px); animation: float 14s ease-in-out infinite 4s;"></div>
+        <div class="absolute inset-0" style="background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    </div>
+
+    <!-- ========== 用户信息表单（问诊前） ========== -->
+    <div id="infoForm" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0f0f0f 50%, #181818 75%, #0a0a0a 100%);">
+        <!-- 背景光晕 -->
+        <div class="absolute inset-0 pointer-events-none">
+            <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.08) 100%);"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(225deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(255,255,255,0.05) 100%);"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(45deg, transparent 20%, rgba(255,255,255,0.06) 60%, transparent 100%);"></div>
+            <div class="absolute top-[-20%] right-[-15%] w-[800px] h-[800px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 30%, transparent 70%); filter: blur(60px); animation: float 10s ease-in-out infinite;"></div>
+            <div class="absolute bottom-[-15%] left-[-10%] w-[700px] h-[700px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.06) 35%, transparent 70%); filter: blur(60px); animation: float 12s ease-in-out infinite 2s;"></div>
+            <div class="absolute top-[30%] left-[10%] w-[500px] h-[500px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 40%, transparent 70%); filter: blur(50px); animation: float 11s ease-in-out infinite 1s;"></div>
+            <div class="absolute top-[15%] left-[55%] w-[450px] h-[450px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 45%, transparent 70%); filter: blur(50px); animation: float 9s ease-in-out infinite 3s;"></div>
+            <div class="absolute inset-0" style="background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;"></div>
+        </div>
+        <div class="card-dark rounded-2xl w-full max-w-md p-8 emergency-card relative z-10">
+            <div class="text-center mb-8">
+                <div class="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid rgba(255,255,255,0.1);">
+                    <svg class="w-7 h-7 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                </div>
+                <h2 class="text-xl font-semibold gradient-text">开始问诊前</h2>
+                <p class="text-sm text-white/35 mt-2">请填写您的基本信息，以便提供更准确的建议</p>
+            </div>
+            <div class="space-y-5">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label block mb-1.5">年龄 *</label>
+                        <input type="number" id="formAge" min="0" max="150" placeholder="岁" class="form-input w-full px-3.5 py-2.5 rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="form-label block mb-1.5">性别 *</label>
+                        <select id="formGender" class="form-input w-full px-3.5 py-2.5 rounded-xl text-sm">
+                            <option value="" class="bg-[#1a1a1a]">请选择</option>
+                            <option value="男" class="bg-[#1a1a1a]">男</option>
+                            <option value="女" class="bg-[#1a1a1a]">女</option>
+                            <option value="其他" class="bg-[#1a1a1a]">其他</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label block mb-1.5">既往病史 <span class="text-white/25">(选填)</span></label>
+                    <textarea id="formHistory" rows="2" placeholder="如：高血压、糖尿病、心脏病等" class="form-input w-full px-3.5 py-2.5 rounded-xl text-sm resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="form-label block mb-1.5">过敏史 <span class="text-white/25">(选填)</span></label>
+                    <textarea id="formAllergy" rows="2" placeholder="如：青霉素、海鲜过敏等" class="form-input w-full px-3.5 py-2.5 rounded-xl text-sm resize-none"></textarea>
+                </div>
+                <div id="formError" class="hidden text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></div>
+                <button onclick="submitInfoForm()" class="send-btn w-full py-3 rounded-xl text-sm font-semibold mt-2">
+                    开始问诊
+                </button>
+                <p class="text-center text-xs text-white/20 mt-1">您的信息仅用于本次问诊，不会上传保存</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 紧急症状警告弹窗 ========== -->
+    <div id="emergencyModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4" style="background: rgba(185,28,28,0.2); backdrop-filter: blur(12px);">
+        <div class="emergency-card bg-[#1a1a1a] border border-red-500/30 rounded-2xl w-full max-w-sm p-8 text-center" style="box-shadow: 0 0 60px rgba(239,68,68,0.15), 0 8px 32px rgba(0,0,0,0.5);">
+            <div class="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center emergency-btn" style="background: rgba(239,68,68,0.15); border: 2px solid rgba(239,68,68,0.3);">
+                <svg class="w-10 h-10 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-red-400 mb-2">检测到可能的紧急症状</h3>
+            <p class="text-sm text-white/60 mb-6 leading-relaxed">您的症状描述中包含可能需要紧急处理的信息。<br>建议您<strong class="text-red-400">立即拨打120</strong>急救电话或前往最近医院急诊。</p>
+            <div class="space-y-3">
+                <a href="tel:120" class="block w-full py-3 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition text-center">
+                    拨打 120 急救电话
+                </a>
+                <button onclick="closeEmergency()" class="block w-full py-3 rounded-xl text-sm font-medium text-white/60 hover:text-white/80 transition" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);">
+                    我知道了，继续问诊
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div id="mainContainer" class="hidden w-full max-w-2xl card-dark rounded-2xl flex flex-col h-[92vh] max-h-[850px] overflow-hidden relative z-10">
+
+        <!-- 头部 -->
+        <div class="bg-gradient-to-r from-white/[0.06] via-white/[0.03] to-white/[0.05] border-b border-white/[0.08] text-white px-6 py-4 flex-shrink-0 relative">
+            <div class="shimmer-line absolute inset-0"></div>
+            <div class="flex items-center justify-between relative">
+                <div>
+                    <h1 class="text-lg font-semibold tracking-tight gradient-text">AI医疗问诊助手</h1>
+                    <p class="text-xs text-white/40 mt-1" id="headerSubtitle">描述您的症状，获取专业建议</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="toggleHistory()" title="历史记录"
+                        class="btn-ghost w-9 h-9 rounded-lg flex items-center justify-center text-sm">
+                        📋
+                    </button>
+                    <button onclick="resetConversation()" title="新对话"
+                        class="btn-ghost w-9 h-9 rounded-lg flex items-center justify-center text-sm">
+                        ✏️
+                    </button>
+                    <button onclick="generateReport()" id="reportBtn" title="生成报告"
+                        class="hidden btn-ghost px-3 h-9 rounded-lg flex items-center justify-center text-xs font-medium gap-1 whitespace-nowrap">
+                        📄 生成报告
+                    </button>
+                </div>
+            </div>
+            <!-- 追问进度条 -->
+            <div id="progressBar" class="hidden mt-3 relative">
+                <div class="flex items-center justify-between text-xs text-white/50 mb-1.5">
+                    <span id="progressLabel">正在收集症状信息...</span>
+                    <span id="progressCount"></span>
+                </div>
+                <div class="w-full h-1 progress-track rounded-full overflow-hidden">
+                    <div id="progressFill" class="h-full progress-fill rounded-full transition-all duration-500" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史记录侧边栏 -->
+        <div id="historyPanel"
+            class="hidden absolute inset-0 z-30 bg-black/80 modal-backdrop flex">
+            <div class="w-80 max-w-[80%] bg-[#1a1a1a] border-l border-white/[0.08] h-full flex flex-col shadow-2xl ml-auto">
+                <div class="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
+                    <h2 class="font-semibold text-white text-sm">对话历史</h2>
+                    <div class="flex gap-3">
+                        <button onclick="clearAllHistory()" class="text-xs text-white/40 hover:text-white/70 transition">清空</button>
+                        <button onclick="toggleHistory()" class="text-white/40 hover:text-white/70 text-lg leading-none">&times;</button>
+                    </div>
+                </div>
+                <div id="historyList" class="flex-1 overflow-y-auto p-3 space-y-2">
+                    <p class="text-white/30 text-sm text-center py-8">暂无历史记录</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 报告模态框 -->
+        <div id="reportModal"
+            class="hidden fixed inset-0 z-40 bg-black/85 modal-backdrop flex items-center justify-center p-4">
+            <div class="bg-[#1a1a1a] border border-white/[0.08] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                    <h2 class="font-semibold text-white text-sm">问诊报告</h2>
+                    <div class="flex gap-2">
+                        <button onclick="downloadPDF()" class="px-3 py-1.5 text-xs bg-white text-black rounded-lg hover:bg-white/90 transition font-medium flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3"/></svg>
+                            下载PDF
+                        </button>
+                        <button onclick="window.print()" class="px-3 py-1.5 text-xs bg-white/10 text-white border border-white/[0.1] rounded-lg hover:bg-white/20 transition font-medium">打印</button>
+                        <button onclick="closeReport()" class="text-white/40 hover:text-white/70 text-2xl leading-none">&times;</button>
+                    </div>
+                </div>
+                <div id="reportContent" class="flex-1 overflow-y-auto px-6 py-5 text-white/80 leading-relaxed text-sm"></div>
+                <div class="px-6 py-3 border-t border-white/[0.08] text-center">
+                    <p class="text-xs text-white/30">本报告由AI生成，仅供参考，不构成医疗诊断</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 附近医院模态框 -->
+        <div id="hospitalModal"
+            class="hidden fixed inset-0 bg-black/85 modal-backdrop flex items-center justify-center p-4"
+            style="z-index: 45;">
+            <div class="bg-[#1a1a1a] border border-white/[0.08] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.08]">
+                    <div>
+                        <h2 class="font-semibold text-white text-sm">🏥 附近医院</h2>
+                        <p class="text-xs text-white/40 mt-0.5" id="hospitalModalSubtitle">正在搜索附近医院...</p>
+                    </div>
+                    <button onclick="closeHospitalModal()" class="text-white/40 hover:text-white/70 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- 左侧地图 -->
+                    <div class="w-1/2 min-w-[250px] border-r border-white/[0.08]">
+                        <div id="amapContainer" class="w-full h-full min-h-[350px]" style="background: #1a1a1a;"></div>
+                    </div>
+                    <!-- 右侧医院列表 -->
+                    <div class="w-1/2 flex flex-col">
+                        <div id="hospitalList" class="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                            <div class="text-white/40 text-sm text-center py-8">正在定位并搜索附近医院...</div>
+                        </div>
+                        <div class="px-4 py-2 border-t border-white/[0.08] text-center">
+                            <p class="text-xs text-white/25">数据来源：高德地图 · 仅供参考</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 聊天区域 -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto px-5 pt-5 pb-2 space-y-1">
+        </div>
+
+        <!-- 打字指示器 -->
+        <div id="typingIndicator" class="hidden px-5 py-2">
+            <div class="inline-flex gap-1.5 px-4 py-3 bubble-ai rounded-2xl rounded-bl">
+                <span class="typing-dot w-1.5 h-1.5 bg-white/40 rounded-full inline-block"></span>
+                <span class="typing-dot w-1.5 h-1.5 bg-white/40 rounded-full inline-block"></span>
+                <span class="typing-dot w-1.5 h-1.5 bg-white/40 rounded-full inline-block"></span>
+            </div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="p-4 bg-white/[0.03] border-t border-white/[0.08] flex-shrink-0">
+            <input id="imageInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+            <div id="imagePreviewBar" class="hidden mb-3"></div>
+            <div class="flex gap-3 items-end">
+                <div class="flex flex-col gap-2">
+                    <button id="voiceBtn" onclick="toggleVoiceInput()"
+                        class="btn-ghost w-[46px] h-[46px] rounded-xl flex items-center justify-center flex-shrink-0 text-white/70">
+                        <svg class="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                            <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                            <path d="M12 19v4"/>
+                            <path d="M8 23h8"/>
+                        </svg>
+                    </button>
+                    <button onclick="document.getElementById('imageInput').click()"
+                        class="btn-ghost w-[46px] h-[46px] rounded-xl flex items-center justify-center flex-shrink-0 text-white/70">
+                        <svg class="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                    </button>
+                </div>
+                <textarea id="userInput"
+                    placeholder="描述您的症状，例如：头痛、发热、咳嗽等..."
+                    rows="1"
+                    class="input-glow flex-1 px-4 py-3 border border-white/[0.08] rounded-xl text-sm outline-none resize-none font-[inherit] min-h-[46px] max-h-[120px] transition-all placeholder:text-white/25 bg-white/[0.04] text-white/90"
+                ></textarea>
+                <button id="sendBtn" onclick="sendMessage()"
+                    class="send-btn w-[46px] h-[46px] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部免责 -->
+        <div class="px-5 py-2.5 border-t border-white/[0.04] text-center text-xs text-white/25 flex-shrink-0">
+            本应用仅供健康咨询参考，不构成医疗诊断建议。紧急情况请拨打120或就近就医。
+        </div>
+    </div>
+
+    <script>
+    // ==================== 配置 ====================
+    const API_CONFIG = {
+        baseURL: 'https://claude.ai4cn.cloud/v1/messages',
+        apiKey: 'sk-zBBe2wdaX9N3wHD0lRTgIw57jFOt3TjbeRmLeQzd72WAR7w9',
+        model: 'claude-sonnet-4-6'
+    };
+
+    // 高德地图配置
+    const AMAP_CONFIG = {
+        key: 'cf14cba96b028f025d7514e3a12663f6',
+        webApiKey: 'cf14cba96b028f025d7514e3a12663f6'
+    };
+
+    const STORAGE_KEY = 'medical_consultation_history';
+    const USER_INFO_KEY = 'medical_user_info';
+    const MAX_ROUNDS_BEFORE_REPORT = 6;
+
+    // ==================== 紧急症状关键词 ====================
+    const EMERGENCY_KEYWORDS = [
+        '胸痛', '呼吸困难', '窒息', '意识不清', '昏迷', '意识丧失',
+        '大量出血', '自杀', '服毒', '心脏骤停', '心跳停止',
+        '严重烧伤', '口吐白沫', '抽搐不止', '剧烈头痛伴随呕吐',
+        '无法呼吸', '大出血', '吐血', '咳血', '便血',
+        '过敏性休克', '窒息感', '气管异物', '溺水', '触电',
+        '中毒', '农药', '割腕', '跳楼'
+    ];
+
+    const AI_URGENCY_KEYWORDS = [
+        '立即就诊', '建议立即就医', '拨打120', '紧急', '危险信号',
+        '立即拨打', '尽快就医', '马上就医', '立即去医院', '需要紧急处理',
+        '属于紧急情况', '危及生命', '生命危险'
+    ];
+
+    // ==================== 状态 ====================
+    let userInfo = { age: '', gender: '', medicalHistory: '', allergies: '' };
+    let conversationHistory = [];
+    let symptomInfo = { main: '', location: '', duration: '', severity: '', triggers: '', other: '' };
+    let followUpStage = 0;
+    let messageCount = 0;
+    let currentSessionId = null;
+    let emergencyShown = false;
+    let askedAboutHospital = false;  // 是否已询问过附近医院
+    let pendingImage = null;
+    let pendingImagePreview = '';
+    let pendingImageMeta = null;
+    let recognition = null;
+    let isRecording = false;
+
+    const chatContainer = document.getElementById('chatContainer');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const reportBtn = document.getElementById('reportBtn');
+    const progressBar = document.getElementById('progressBar');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const imagePreviewBar = document.getElementById('imagePreviewBar');
+
+    // ==================== 系统提示词 ====================
+    function buildSystemPrompt() {
+        let userBlock = '';
+        if (userInfo.age || userInfo.gender) {
+            userBlock = `\n\n## 当前患者信息\n- 年龄：${userInfo.age || '未知'}岁\n- 性别：${userInfo.gender || '未知'}\n- 既往病史：${userInfo.medicalHistory || '无'}\n- 过敏史：${userInfo.allergies || '无'}\n\n请在分析时参考以上信息，特别注意过敏史和既往病史对症状分析的影响。\n`;
+        }
+        return `你是一位专业、友善的AI医疗问诊助手。你必须严格遵守以下问诊流程：
+${userBlock}
+## 可用工具
+
+你有以下工具可以在合适的时候调用：
+
+1. **search_department** — 当用户描述症状后，你可以调用此工具推荐合适的就医科室。在追问阶段或综合分析阶段均可使用。
+2. **query_medicine** — 当你判断患者可能需要用药时，调用此工具查询药品详细信息。优先从在线免费医学/百科数据源获取真实资料，不足时再结合内置知识补充。注意：只查询信息，不要开处方。
+3. **query_medical_info** — 当你需要查询疾病、症状、检查项目等医学资料时，调用此工具获取在线资料摘要。
+4. **search_nearby_hospital** — 此工具由系统自动调用。当用户在综合分析后回复"需要""是"等肯定答复时，系统会自动触发搜索，你不需要主动调用此工具。你只需要在综合分析回复末尾询问"需要我帮您查询附近医院吗？"即可。
+
+重要：调用工具时，先向用户说明你将要做什么，然后再调用。不要在没有上下文的情况下突然调用工具。
+
+## 问诊流程（必须遵守）
+
+### 第一阶段：追问（前几轮对话）
+当用户描述症状后，你**不要**直接给出诊断结论。你必须先追问以下关键信息（每次追问2-3个问题）：
+
+1. **具体部位** — 哪个部位不舒服？是单侧还是双侧？会放射到其他地方吗？
+2. **持续时间** — 什么时候开始的？是持续性的还是间歇性的？
+3. **严重程度** — 1-10分打几分？影响日常生活吗？
+4. **伴随症状** — 还有其他不舒服的地方吗？
+5. **诱因** — 有没有明显的原因？（受凉、劳累、饮食等）
+6. **既往病史** — 以前有过类似情况吗？有什么慢性病？
+
+### 第二阶段：综合分析（信息收集完后）
+当你已经了解了足够的信息后（通常2-3轮追问后），给出综合建议，格式如下：
+
+**📋 症状分析**
+[总结用户的症状描述]
+
+**🔍 可能原因**
+[列出2-4种可能的常见原因，按可能性排序]
+
+**💊 建议措施**
+[居家护理和缓解建议]
+
+**🏥 就医建议**
+[建议就诊的科室和紧急程度]
+
+---
+
+重要原则：
+- 语气亲切专业，用通俗语言解释
+- 不要下绝对诊断，使用"可能是""考虑"等措辞
+- 出现以下情况立即建议就医：高烧不退、剧烈疼痛、呼吸困难、意识模糊、出血不止等
+- 每次回复末尾加：_本建议仅供参考，请以医生诊断为准_
+- **【必须执行】** 当你进入第二阶段（给出综合分析建议）后，你必须在回复的最后一行加上这句话（不要加粗，作为普通文字）："需要我帮您查询附近医院吗？"
+- 如果用户回复"需要"或"是"等肯定答复，系统会自动触发医院搜索，你不需要再调用 search_nearby_hospital 工具`;
+    }
+
+    let systemPrompt = buildSystemPrompt();
+
+    // ==================== 用户信息表单 ====================
+    function loadUserInfo() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(USER_INFO_KEY));
+            if (saved) {
+                userInfo = saved;
+                document.getElementById('formAge').value = saved.age || '';
+                document.getElementById('formGender').value = saved.gender || '';
+                document.getElementById('formHistory').value = saved.medicalHistory || '';
+                document.getElementById('formAllergy').value = saved.allergies || '';
+            }
+        } catch {}
+    }
+    function clearPendingImage() {
+        pendingImage = null;
+        pendingImagePreview = '';
+        pendingImageMeta = null;
+        imagePreviewBar.classList.add('hidden');
+        imagePreviewBar.innerHTML = '';
+        const imageInput = document.getElementById('imageInput');
+        if (imageInput) imageInput.value = '';
+    }
+
+    function renderPendingImagePreview() {
+        if (!pendingImagePreview || !pendingImageMeta) {
+            clearPendingImage();
+            return;
+        }
+        imagePreviewBar.classList.remove('hidden');
+        imagePreviewBar.innerHTML = `
+            <div class="image-chip rounded-2xl p-3 flex items-center gap-3">
+                <img src="${pendingImagePreview}" alt="上传预览" class="upload-preview">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-white/75 font-medium truncate">${escHtml(pendingImageMeta.name)}</p>
+                    <p class="text-xs text-white/35 mt-1">已附加图片，发送后将结合图片做初步分析</p>
+                </div>
+                <button onclick="clearPendingImage()" class="text-white/35 hover:text-white/70 text-xl leading-none">&times;</button>
+            </div>`;
+    }
+
+    function handleImageUpload(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            addMessage('assistant', '⚠️ 仅支持上传图片文件。');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result || '';
+            pendingImagePreview = String(result);
+            const base64 = pendingImagePreview.includes(',') ? pendingImagePreview.split(',')[1] : pendingImagePreview;
+            pendingImage = {
+                type: 'base64',
+                media_type: file.type,
+                data: base64
+            };
+            pendingImageMeta = { name: file.name, type: file.type, size: file.size };
+            renderPendingImagePreview();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function toggleVoiceInput() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            addMessage('assistant', '⚠️ 当前浏览器不支持语音输入，请使用 Chrome 或 Edge 浏览器。');
+            return;
+        }
+        if (isRecording && recognition) {
+            recognition.stop();
+            return;
+        }
+        recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.onstart = () => {
+            isRecording = true;
+            voiceBtn.classList.add('voice-active');
+        };
+        recognition.onresult = (event) => {
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            userInput.value = transcript.trim();
+            userInput.dispatchEvent(new Event('input'));
+        };
+        recognition.onerror = () => {
+            isRecording = false;
+            voiceBtn.classList.remove('voice-active');
+            addMessage('assistant', '⚠️ 语音识别失败，请重试。');
+        };
+        recognition.onend = () => {
+            isRecording = false;
+            voiceBtn.classList.remove('voice-active');
+        };
+        recognition.start();
+    }
+
+    function contentToPlainText(content) {
+        if (typeof content === 'string') return content;
+        if (Array.isArray(content)) {
+            return content.map(item => {
+                if (typeof item === 'string') return item;
+                if (!item) return '';
+                if (item.type === 'text') return item.text || '';
+                if (item.type === 'tool_use') return `[调用工具:${item.name || ''}]`;
+                if (item.type === 'tool_result') return typeof item.content === 'string' ? item.content : '';
+                if (item.type === 'image') return '[用户上传了图片]';
+                return item.text || '';
+            }).filter(Boolean).join('\n');
+        }
+        if (content && typeof content === 'object') return content.text || JSON.stringify(content);
+        return String(content || '');
+    }
+
+    function getConversationReportText() {
+        return conversationHistory.map(m => `${m.role === 'user' ? '患者' : '助手'}：${contentToPlainText(m.content)}`).join('\n\n');
+    }
+
+    function extractTextContentFromApiData(data) {
+        if (!Array.isArray(data.content)) return data.content?.text || '';
+        return data.content.filter(block => block?.type === 'text').map(block => block.text || '').join('');
+    }
+
+    loadUserInfo();
+
+    function submitInfoForm() {
+        const age = document.getElementById('formAge').value.trim();
+        const gender = document.getElementById('formGender').value;
+        const history = document.getElementById('formHistory').value.trim();
+        const allergy = document.getElementById('formAllergy').value.trim();
+        const errEl = document.getElementById('formError');
+
+        if (!age || !gender) {
+            errEl.textContent = '请填写年龄和性别';
+            errEl.classList.remove('hidden');
+            return;
+        }
+        if (parseInt(age) < 0 || parseInt(age) > 150) {
+            errEl.textContent = '请输入有效的年龄（0-150）';
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        errEl.classList.add('hidden');
+        userInfo = { age, gender, medicalHistory: history, allergies: allergy };
+        localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
+
+        // 隐藏表单，显示主界面
+        document.getElementById('infoForm').classList.add('hidden');
+        document.getElementById('mainContainer').classList.remove('hidden');
+
+        // 更新头部副标题
+        document.getElementById('headerSubtitle').textContent =
+            `${gender}，${age}岁 · 既往病史：${history || '无'} · 过敏史：${allergy || '无'}`;
+
+        // 重建系统提示词
+        systemPrompt = buildSystemPrompt();
+
+        // 初始化对话
+        initChat();
+    }
+
+    function initChat() {
+        currentSessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        conversationHistory = [{
+            role: 'user',
+            content: '请记住你的角色定位，准备好开始问诊。'
+        }];
+        followUpStage = 0;
+        symptomInfo = { main: '', location: '', duration: '', severity: '', triggers: '', other: '' };
+        messageCount = 0;
+        emergencyShown = false;
+        askedAboutHospital = false;
+        clearPendingImage();
+        if (recognition && isRecording) recognition.stop();
+        reportBtn.classList.add('hidden');
+        reportBtn.classList.remove('flex');
+        progressBar.classList.add('hidden');
+
+        chatContainer.innerHTML = '';
+        const greeting = userInfo.age && userInfo.gender
+            ? `您好！我已了解您的基本情况（${userInfo.gender}，${userInfo.age}岁${userInfo.medicalHistory ? '，有' + userInfo.medicalHistory + '病史' : ''}${userInfo.allergies ? '，对' + userInfo.allergies + '过敏' : ''}）。请告诉我您今天哪里不舒服？`
+            : '您好！我是AI医疗问诊助手。请详细描述您的症状，我会先了解您的情况，然后提供初步建议。';
+        addMessage('assistant', greeting + '\n\n⚠️ 重要提示：本助手仅供参考，不能替代专业医生的诊断。如遇紧急情况，请立即就医或拨打120。');
+    }
+
+    // 回车提交表单
+    ['formAge', 'formHistory', 'formAllergy'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); submitInfoForm(); }
+        });
+    });
+
+    // ==================== 输入框事件 ====================
+    userInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    userInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // ==================== 紧急症状检测 ====================
+    function checkEmergency(text) {
+        if (emergencyShown) return false;
+        for (const kw of EMERGENCY_KEYWORDS) {
+            if (text.includes(kw)) {
+                emergencyShown = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function checkAIUrgency(text) {
+        if (emergencyShown) return false;
+        for (const kw of AI_URGENCY_KEYWORDS) {
+            if (text.includes(kw)) {
+                emergencyShown = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function showEmergencyModal() {
+        document.getElementById('emergencyModal').classList.remove('hidden');
+    }
+
+    function closeEmergency() {
+        document.getElementById('emergencyModal').classList.add('hidden');
+    }
+
+    // ==================== 工具定义 ====================
+    const TOOLS = [
+        {
+            name: 'search_department',
+            description: '根据患者的症状描述，推荐合适的就医科室。输入患者的症状描述和基本信息，返回推荐的科室列表。',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    symptoms: { type: 'string', description: '患者的症状描述' },
+                    patient_info: { type: 'string', description: '患者年龄、性别等基本信息' }
+                },
+                required: ['symptoms']
+            }
+        },
+        {
+            name: 'query_medicine',
+            description: '查询药品的详细信息、适应症、常见用法、禁忌和副作用。优先使用在线免费数据源，返回真实资料摘要。',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    medicine_name: { type: 'string', description: '药品名称' },
+                    symptom: { type: 'string', description: '需要缓解的症状' },
+                    patient_allergy: { type: 'string', description: '患者过敏史，用于提醒禁忌' }
+                },
+                required: ['medicine_name']
+            }
+        },
+        {
+            name: 'query_medical_info',
+            description: '查询疾病、症状、检查项目等医学资料摘要，优先使用在线免费数据源。',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    topic: { type: 'string', description: '疾病或医学主题名称，如感冒、湿疹、胃炎' }
+                },
+                required: ['topic']
+            }
+        },
+        {
+            name: 'search_nearby_hospital',
+            description: '搜索用户当前位置附近的医院。需要获取用户位置权限，返回附近医院列表。',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    department: { type: 'string', description: '需要就诊的科室类型，如"内科""骨科"等' }
+                },
+                required: ['department']
+            }
+        }
+    ];
+
+    // ==================== 工具执行函数 ====================
+    const MEDICINE_DB = {
+        '布洛芬': { category: '解热镇痛药', usage: '用于缓解轻至中度疼痛（头痛、关节痛、偏头痛、牙痛、肌肉痛、神经痛、痛经）及普通感冒或流行性感冒引起的发热', dosage: '口服，成人一次1片（0.2g），若症状不缓解，间隔4-6小时重复用药一次，24小时不超过4次', side_effects: '可能引起胃肠道不适、恶心、头晕，长期使用可能损伤肾功能', contraindications: '活动性消化性溃疡、严重肝肾功能不全、孕妇及哺乳期妇女禁用。对阿司匹林过敏者慎用', otc: true },
+        '对乙酰氨基酚': { category: '解热镇痛药', usage: '用于普通感冒或流行性感冒引起的发热，也用于缓解轻至中度疼痛', dosage: '口服，成人一次1片（0.5g），若持续发热或疼痛，间隔4-6小时重复用药一次，24小时不超过4次', side_effects: '正常剂量下不良反应较少，过量可能引起肝损伤', contraindications: '严重肝肾功能不全者禁用', otc: true },
+        '阿莫西林': { category: '抗生素', usage: '用于敏感菌所致的呼吸道感染、泌尿生殖道感染、皮肤软组织感染等', dosage: '口服，成人一次0.5g，每6-8小时1次，一日剂量不超过4g', side_effects: '可能引起恶心、呕吐、腹泻、皮疹等过敏反应', contraindications: '青霉素过敏者禁用。传染性单核细胞增多症患者禁用', otc: false },
+        '头孢克洛': { category: '抗生素', usage: '用于敏感菌引起的呼吸道感染、中耳炎、尿路感染和皮肤软组织感染', dosage: '口服，成人一次0.25g，一日3次', side_effects: '可能引起腹泻、恶心、呕吐、皮疹', contraindications: '对头孢类抗生素过敏者禁用', otc: false },
+        '奥美拉唑': { category: '质子泵抑制剂', usage: '用于胃溃疡、十二指肠溃疡、胃食管反流病、应激性溃疡', dosage: '口服，成人一次20mg（1粒），一日1-2次，早晨或早晚服用', side_effects: '可能引起头痛、腹泻、恶心、腹痛', contraindications: '对本品过敏者禁用，严重肾功能不全者慎用', otc: false },
+        '氯雷他定': { category: '抗过敏药', usage: '用于缓解过敏性鼻炎、荨麻疹等过敏症状', dosage: '口服，成人一次10mg（1片），一日1次', side_effects: '偶见乏力、头痛、口干、胃肠道不适', contraindications: '对本品过敏者禁用', otc: true },
+        '蒙脱石散': { category: '止泻药', usage: '用于成人及儿童急慢性腹泻，以及食道、胃、十二指肠相关疾病的辅助治疗', dosage: '口服，成人一次1袋（3g），一日3次', side_effects: '偶见便秘', contraindications: '对本品过敏者禁用', otc: true },
+        '复方感冒灵': { category: '感冒药', usage: '用于感冒引起的头痛、发热、鼻塞、流涕、咽痛等', dosage: '口服，一次4片，一日3次', side_effects: '可能引起嗜睡、口干，含对乙酰氨基酚避免与其他感冒药同服', contraindications: '严重肝肾功能不全者禁用，服药期间禁止饮酒', otc: true },
+        '盐酸二甲双胍': { category: '降糖药', usage: '用于2型糖尿病患者，特别是肥胖的2型糖尿病患者', dosage: '口服，起始剂量一次0.25g，一日2-3次，根据血糖调整', side_effects: '可能引起胃肠道不适、腹泻、恶心，长期使用注意维生素B12缺乏', contraindications: '1型糖尿病、糖尿病酮症酸中毒、严重感染、肾功能不全者禁用', otc: false },
+        '硝苯地平控释片': { category: '降压药', usage: '用于高血压、心绞痛', dosage: '口服，一次30mg，一日1次', side_effects: '可能引起头痛、面部潮红、踝部水肿、心悸', contraindications: '心源性休克、严重主动脉瓣狭窄、不稳定型心绞痛、急性心肌梗死禁用', otc: false }
+    };
+
+    async function executeTool(name, input) {
+        switch (name) {
+            case 'search_department': return toolSearchDepartment(input);
+            case 'query_medicine': return await toolQueryMedicine(input);
+            case 'query_medical_info': return await toolQueryMedicalInfo(input);
+            case 'search_nearby_hospital': return await toolSearchNearbyHospital(input);
+            default: return JSON.stringify({ error: `未知工具: ${name}` });
+        }
+    }
+
+    function toolSearchDepartment(input) {
+        const sym = (input.symptoms || '').toLowerCase();
+        const info = input.patient_info || '';
+        let departments = [];
+
+        const rules = [
+            { keys: ['头痛', '头晕', '偏头痛', '头胀'], depts: ['神经内科', '内科'] },
+            { keys: ['胸痛', '胸闷', '心悸', '心跳'], depts: ['心内科', '急诊科'] },
+            { keys: ['呼吸困难', '气喘', '哮喘', '咳嗽', '喘'], depts: ['呼吸内科', '急诊科'] },
+            { keys: ['腹痛', '腹泻', '恶心', '呕吐', '胃痛', '拉肚子', '腹胀'], depts: ['消化内科', '胃肠外科'] },
+            { keys: ['腰痛', '腿痛', '关节痛', '骨折', '扭伤', '肩膀痛', '膝盖痛', '颈痛', '颈椎'], depts: ['骨科', '康复科'] },
+            { keys: ['皮疹', '过敏', '瘙痒', '起包', '红肿'], depts: ['皮肤科', '变态反应科'] },
+            { keys: ['发烧', '发热', '高烧', '低烧', '体温'], depts: ['发热门诊', '内科'] },
+            { keys: ['眼睛', '视力', '眼疼', '流泪'], depts: ['眼科'] },
+            { keys: ['耳朵', '听力', '耳鸣', '耳痛'], depts: ['耳鼻喉科'] },
+            { keys: ['喉咙', '嗓子', '咽痛', '扁桃体', '声音嘶哑'], depts: ['耳鼻喉科', '呼吸内科'] },
+            { keys: ['尿频', '尿急', '尿痛', '血尿', '肾'], depts: ['泌尿外科', '肾内科'] },
+            { keys: ['白带', '月经', '经期', '子宫', '怀孕', '阴道'], depts: ['妇科'] },
+            { keys: ['乳房', '乳腺'], depts: ['乳腺外科', '妇科'] },
+            { keys: ['抑郁', '焦虑', '失眠', '情绪', '心理'], depts: ['心理科', '精神科'] },
+            { keys: ['牙痛', '牙龈', '口腔', '牙齿'], depts: ['口腔科', '牙科'] },
+            { keys: ['血压', '高血压', '低血压'], depts: ['心内科', '内科'] },
+            { keys: ['血糖', '糖尿病', '多饮', '多尿'], depts: ['内分泌科', '内科'] },
+            { keys: ['甲状腺', '甲亢', '甲减'], depts: ['内分泌科'] },
+            { keys: ['腰酸', '腰痛', '小便异常', '前列腺'], depts: ['泌尿外科'] },
+            { keys: ['鼻塞', '流鼻涕', '打喷嚏', '鼻炎'], depts: ['耳鼻喉科'] },
+        ];
+
+        for (const rule of rules) {
+            if (rule.keys.some(k => sym.includes(k))) {
+                departments.push(...rule.depts);
+            }
+        }
+
+        departments = [...new Set(departments)];
+        if (departments.length === 0) departments = ['内科', '全科'];
+
+        const result = {
+            recommended_departments: departments.map((d, i) => ({
+                rank: i + 1,
+                name: d,
+                reason: getDeptReason(d, sym)
+            })),
+            note: '以上科室推荐仅供参考，具体以医院分诊台建议为准。如症状紧急请直接前往急诊科。'
+        };
+
+        return JSON.stringify(result);
+    }
+
+    function getDeptReason(dept, symptoms) {
+        const reasons = {
+            '神经内科': '症状涉及神经系统，需排除脑血管等问题',
+            '心内科': '症状可能涉及心血管系统，需进一步检查',
+            '急诊科': '症状可能需要紧急处理',
+            '呼吸内科': '症状涉及呼吸系统',
+            '消化内科': '症状涉及消化系统',
+            '骨科': '症状涉及骨骼肌肉系统',
+            '皮肤科': '症状涉及皮肤',
+            '眼科': '症状涉及眼部',
+            '耳鼻喉科': '症状涉及耳、鼻、咽喉',
+            '泌尿外科': '症状涉及泌尿系统',
+            '妇科': '症状涉及女性生殖系统',
+            '心理科': '症状涉及心理健康',
+            '精神科': '症状可能涉及精神健康',
+            '口腔科': '症状涉及口腔',
+            '牙科': '症状涉及牙齿',
+            '内分泌科': '症状可能涉及内分泌代谢系统',
+            '发热门诊': '有发热症状需先排查传染性疾病',
+            '内科': '综合内科可初步评估',
+            '全科': '全科可进行初步筛查和分诊',
+            '乳腺外科': '症状涉及乳腺',
+            '康复科': '可用于运动系统康复',
+            '变态反应科': '过敏相关症状',
+            '肾内科': '涉及肾脏功能',
+            '胃肠外科': '可能需要外科干预的消化系统问题'
+        };
+        return reasons[dept] || '根据症状建议前往该科室就诊';
+    }
+
+    async function fetchWikipediaSummary(term) {
+        const candidates = [
+            `https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`,
+            `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`
+        ];
+        for (const url of candidates) {
+            try {
+                const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                if (data.extract) {
+                    return {
+                        title: data.title || term,
+                        summary: data.extract,
+                        url: data.content_urls?.desktop?.page || data.content_urls?.mobile?.page || '',
+                        source: 'Wikipedia'
+                    };
+                }
+            } catch {}
+        }
+        return null;
+    }
+
+    async function toolQueryMedicine(input) {
+        const name = (input.medicine_name || '').replace(/[片粒胶囊丸袋支]$/, '');
+        const allergy = input.patient_allergy || '';
+        const drug = MEDICINE_DB[name];
+        const wiki = await fetchWikipediaSummary(input.medicine_name || name);
+
+        if (!drug && !wiki) {
+            return JSON.stringify({
+                found: false,
+                message: `未查询到“${input.medicine_name}”的在线资料。`,
+                suggestion: '建议到正规医院或药店咨询医生/药师，不要自行长期用药。',
+                source: 'online'
+            });
+        }
+
+        const result = {
+            found: true,
+            medicine: input.medicine_name || name,
+            category: drug?.category || '药品信息',
+            usage: drug?.usage || (wiki?.summary ? `在线资料摘要：${wiki.summary}` : '请遵医嘱使用'),
+            dosage: drug?.dosage || '在线资料未提供明确剂量，请严格遵医嘱或查看药品说明书。',
+            side_effects: drug?.side_effects || '在线资料未提供完整常见副作用，请阅读药品说明书。',
+            contraindications: drug?.contraindications || '在线资料未提供完整禁忌信息，请阅读药品说明书并咨询医生。',
+            is_otc: typeof drug?.otc === 'boolean' ? drug.otc : false,
+            otc_label: typeof drug?.otc === 'boolean' ? (drug.otc ? '非处方药（OTC）' : '处方药（需医生处方）') : '需结合说明书判断',
+            external_summary: wiki?.summary || '',
+            external_url: wiki?.url || '',
+            source: wiki ? 'Wikipedia + AI本地知识补充' : 'AI本地知识库'
+        };
+
+        if (allergy) {
+            result.allergy_warning = `患者过敏史：${allergy}。请务必注意上述禁忌症，如存在冲突请避免使用该药物。`;
+        }
+
+        return JSON.stringify(result);
+    }
+
+    async function toolQueryMedicalInfo(input) {
+        const topic = input.topic || '';
+        const wiki = await fetchWikipediaSummary(topic);
+        if (!wiki) {
+            return JSON.stringify({
+                found: false,
+                topic,
+                message: `未查询到“${topic}”的在线资料。`,
+                source: 'online'
+            });
+        }
+        return JSON.stringify({
+            found: true,
+            topic,
+            title: wiki.title,
+            summary: wiki.summary,
+            url: wiki.url,
+            source: wiki.source
+        });
+    }
+
+    async function toolSearchNearbyHospital(input) {
+        const department = input.department || '综合';
+
+        try {
+            const pos = await getUserLocation();
+
+            // 使用高德地图JS API的PlaceSearch进行POI周边搜索
+            const hospitals = await new Promise((resolve) => {
+                if (typeof AMap === 'undefined') {
+                    fallbackWebSearch(pos, department).then(resolve);
+                    return;
+                }
+
+                const placeSearch = new AMap.PlaceSearch({
+                    type: '090100',
+                    pageSize: 10,
+                    pageIndex: 1,
+                    extensions: 'all'
+                });
+
+                placeSearch.searchNearBy('', [pos.lng, pos.lat], 50000, function(status, result) {
+                    if (status === 'complete' && result.poiList && result.poiList.pois && result.poiList.pois.length > 0) {
+                        const list = result.poiList.pois.map((p, i) => ({
+                            rank: i + 1,
+                            name: p.name,
+                            address: p.address || (p.pname || '') + (p.cityname || '') + (p.adname || ''),
+                            distance: p.distance ? (parseInt(p.distance) >= 1000 ? (parseInt(p.distance) / 1000).toFixed(1) + 'km' : parseInt(p.distance) + 'm') : '未知',
+                            phone: p.tel || '',
+                            location: p.location ? [p.location.lng, p.location.lat] : null
+                        }));
+                        resolve(list);
+                    } else {
+                        fallbackWebSearch(pos, department).then(resolve);
+                    }
+                });
+            });
+
+            if (hospitals.length > 0) {
+                showHospitalModal(hospitals, pos, department);
+                return JSON.stringify({
+                    success: true,
+                    count: hospitals.length,
+                    department,
+                    summary: `已为您找到 ${hospitals.length} 家附近医院，已在地图上标注。`
+                });
+            }
+
+            const city = await getUserCity(pos);
+            return JSON.stringify({
+                success: false,
+                fallback: true,
+                city,
+                map_link: `https://uri.amap.com/search?keyword=医院&city=${encodeURIComponent(city || '全国')}`,
+                summary: '附近医院搜索没有返回结果，已为您生成高德地图快捷搜索链接。'
+            });
+
+        } catch (err) {
+            const fallbackCity = '全国';
+            return JSON.stringify({
+                success: false,
+                fallback: true,
+                city: fallbackCity,
+                map_link: `https://uri.amap.com/search?keyword=医院&city=${encodeURIComponent(fallbackCity)}`,
+                summary: '搜索附近医院失败，已为您生成高德地图快捷搜索链接。'
+            });
+        }
+    }
+
+    // ==================== 医院地图模态框 ====================
+    let amapInstance = null;
+
+    function showHospitalModal(hospitals, userPos, department) {
+        const modal = document.getElementById('hospitalModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        modal.style.visibility = 'visible';
+        modal.style.opacity = '1';
+        document.getElementById('hospitalModalSubtitle').textContent =
+            hospitals.length > 0 ? `为您找到 ${hospitals.length} 家附近医院（50km范围内）` : '未找到附近医院';
+
+        // 渲染医院列表
+        const listEl = document.getElementById('hospitalList');
+        if (hospitals.length === 0) {
+            listEl.innerHTML = '<div class="text-white/40 text-sm text-center py-8">未在附近找到医院，请扩大搜索范围</div>';
+        } else {
+            listEl.innerHTML = hospitals.map(h => `
+                <button onclick="panToHospital(${h.location ? h.location[0] : 'null'}, ${h.location ? h.location[1] : 'null'})"
+                    class="w-full text-left p-3 rounded-xl hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] transition group">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1">
+                            <p class="text-sm text-white/80 font-medium">${escHtml(h.name)}</p>
+                            <p class="text-xs text-white/35 mt-1">📍 ${escHtml(h.address)}</p>
+                            <div class="flex items-center gap-3 mt-1.5 text-xs text-white/30">
+                                <span>📏 ${h.distance}</span>
+                                ${h.phone ? `<span>📞 ${escHtml(h.phone)}</span>` : ''}
+                            </div>
+                        </div>
+                        <span class="text-xs text-white/20 group-hover:text-white/50 mt-1">→</span>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        // 初始化地图
+        setTimeout(() => initAMap(hospitals, userPos), 100);
+    }
+
+    function initAMap(hospitals, userPos) {
+        const container = document.getElementById('amapContainer');
+        if (!container || typeof AMap === 'undefined') return;
+
+        // 销毁旧地图
+        if (amapInstance) {
+            amapInstance.destroy();
+            amapInstance = null;
+        }
+
+        try {
+            amapInstance = new AMap.Map('amapContainer', {
+                zoom: 14,
+                center: [userPos.lng, userPos.lat],
+                mapStyle: 'amap://styles/dark',
+                resizeEnable: true
+            });
+
+            // 用户位置标记
+            new AMap.Marker({
+                position: [userPos.lng, userPos.lat],
+                title: '我的位置',
+                content: '<div style="width:14px;height:14px;background:#3b82f6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,0.5);"></div>',
+                offset: new AMap.Pixel(-7, -7),
+                map: amapInstance
+            });
+
+            // 医院标记
+            hospitals.forEach((h, i) => {
+                if (!h.location) return;
+                new AMap.Marker({
+                    position: h.location,
+                    title: h.name,
+                    label: {
+                        content: `<span style="background:rgba(26,26,26,0.85);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;border:1px solid rgba(255,255,255,0.1);white-space:nowrap;">${i + 1}. ${h.name.length > 12 ? h.name.substring(0, 12) + '...' : h.name}</span>`,
+                        direction: 'top',
+                        offset: new AMap.Pixel(0, -5)
+                    },
+                    map: amapInstance
+                });
+            });
+
+            // 自适应视野
+            if (hospitals.filter(h => h.location).length > 0) {
+                amapInstance.setFitView(null, false, [60, 60, 60, 60]);
+            }
+        } catch (e) {
+            container.innerHTML = '<div class="flex items-center justify-center h-full text-white/40 text-sm">地图加载失败</div>';
+        }
+    }
+
+    function panToHospital(lng, lat) {
+        if (amapInstance && lng && lat) {
+            amapInstance.setZoomAndCenter(16, [lng, lat]);
+        }
+    }
+
+    function closeHospitalModal() {
+        const modal = document.getElementById('hospitalModal');
+        modal.classList.add('hidden');
+        modal.style.display = '';
+    }
+
+    // Web API降级搜索
+    async function fallbackWebSearch(pos, department) {
+        try {
+            const url = `https://restapi.amap.com/v3/place/around?key=${AMAP_CONFIG.webApiKey}&location=${pos.lng},${pos.lat}&types=090100&radius=50000&sortrule=distance&offset=10&output=JSON`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.status === '1' && data.pois && data.pois.length > 0) {
+                return data.pois.map((p, i) => ({
+                    rank: i + 1,
+                    name: p.name,
+                    address: p.address || (p.pname || '') + (p.cityname || '') + (p.adname || ''),
+                    distance: p.distance ? (parseInt(p.distance) >= 1000 ? (parseInt(p.distance) / 1000).toFixed(1) + 'km' : parseInt(p.distance) + 'm') : '未知',
+                    phone: p.tel || '',
+                    location: p.location ? p.location.split(',').map(Number) : null
+                }));
+            }
+        } catch {}
+        return [];
+    }
+
+    async function getUserCity(pos) {
+        try {
+            const url = `https://restapi.amap.com/v3/geocode/regeo?key=${AMAP_CONFIG.webApiKey}&location=${pos.lng},${pos.lat}&extensions=base`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.status === '1' && data.regeocode?.addressComponent) {
+                return data.regeocode.addressComponent.city || data.regeocode.addressComponent.province || '全国';
+            }
+        } catch {}
+        return '全国';
+    }
+
+    function getUserLocation() {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                // 默认位置（北京天安门）
+                resolve({ lng: 116.397428, lat: 39.90923 });
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }),
+                () => {
+                    // 定位失败使用默认位置
+                    resolve({ lng: 116.397428, lat: 39.90923 });
+                },
+                { timeout: 8000, enableHighAccuracy: false }
+            );
+        });
+    }
+
+    // ==================== 工具结果格式化 ====================
+    function formatToolResult(name, resultStr) {
+        try {
+            const data = JSON.parse(resultStr);
+            switch (name) {
+                case 'search_department':
+                    if (data.recommended_departments) {
+                        let text = '📌 **科室推荐结果：**\n';
+                        data.recommended_departments.forEach(d => {
+                            text += `\n${d.rank}. **${d.name}** — ${d.reason}`;
+                        });
+                        text += `\n\n_${data.note}_`;
+                        return text;
+                    }
+                    return '科室查询失败，建议前往医院分诊台咨询。';
+
+                case 'query_medicine':
+                    if (data.found) {
+                        let text = `💊 **${data.medicine}**（${data.otc_label}，${data.category}）\n\n`;
+                        text += `**用途：** ${data.usage}\n`;
+                        text += `**用法用量：** ${data.dosage}\n`;
+                        text += `**不良反应：** ${data.side_effects}\n`;
+                        text += `**禁忌：** ${data.contraindications}\n`;
+                        if (data.external_summary) text += `\n**在线资料摘要：** ${data.external_summary}\n`;
+                        if (data.allergy_warning) text += `\n⚠️ **过敏提醒：** ${data.allergy_warning}\n`;
+                        if (data.external_url) text += `\n[🔗 查看来源](${data.external_url})\n`;
+                        text += `\n_来源：${data.source || 'AI知识库'}_`;
+                        return text;
+                    }
+                    return `⚠️ ${data.message}\n\n${data.suggestion || ''}`;
+
+                case 'query_medical_info':
+                    if (data.found) {
+                        return `📚 **${data.title || data.topic}**\n\n${data.summary}${data.url ? `\n\n[🔗 查看来源](${data.url})` : ''}\n\n_来源：${data.source || 'Wikipedia'}_`;
+                    }
+                    return `⚠️ ${data.message || '未查询到在线资料。'}`;
+
+                case 'search_nearby_hospital':
+                    if (data.success) {
+                        return `🏥 **附近医院搜索完成**\n\n已为您找到 **${data.count}** 家附近医院，已在地图中标注（蓝色圆点为您的位置）。\n\n您可以点击右侧列表中的医院查看详细位置。`;
+                    }
+                    if (data.fallback && data.map_link) {
+                        return `📍 **附近医院快捷搜索**\n\n${data.summary}\n\n[🔗 点击打开高德地图搜索附近医院](${data.map_link})`;
+                    }
+                    return `⚠️ 搜索附近医院失败。\n\n${data.summary || '请确保已授予位置权限。'}`;
+            }
+        } catch {
+            return resultStr;
+        }
+        return resultStr;
+    }
+
+    // ==================== API调用（支持工具） ====================
+    async function callClaudeStreamWithTools(messages, onChunk, onToolCall) {
+        // 将 systemPrompt 作为第一条消息插入
+        const messagesWithSystem = [
+            { role: 'user', content: systemPrompt },
+            ...messages
+        ];
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+        const response = await fetch(API_CONFIG.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': API_CONFIG.apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: API_CONFIG.model,
+                max_tokens: 4096,
+                stream: true,
+                messages: messagesWithSystem,
+                tools: TOOLS
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error?.message || `API错误: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        let toolCalls = [];
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') continue;
+
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+                        toolCalls.push({ id: parsed.content_block.id, name: parsed.content_block.name, input: '' });
+                    } else if (parsed.type === 'content_block_delta') {
+                        if (parsed.delta?.type === 'text_delta' && parsed.delta?.text) {
+                            fullText += parsed.delta.text;
+                            onChunk(parsed.delta.text);
+                        } else if (parsed.delta?.type === 'input_json_delta' && parsed.delta?.partial_json) {
+                            if (toolCalls.length > 0) {
+                                toolCalls[toolCalls.length - 1].input += parsed.delta.partial_json;
+                            }
+                        }
+                    }
+                } catch { /* skip malformed */ }
+            }
+        }
+
+        // 处理工具调用
+        for (const tc of toolCalls) {
+            let input;
+            try { input = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input; }
+            catch { input = {}; }
+            if (onToolCall) await onToolCall(tc.name, input, tc.id);
+        }
+
+        return { text: fullText, toolCalls };
+    }
+
+    async function callClaudeNonStream(messages) {
+        const messagesWithSystem = [
+            { role: 'user', content: systemPrompt },
+            ...messages
+        ];
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+        const response = await fetch(API_CONFIG.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': API_CONFIG.apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: API_CONFIG.model,
+                max_tokens: 4096,
+                messages: messagesWithSystem
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `API错误: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return extractTextContentFromApiData(data);
+    }
+
+    async function callClaudeAPI(messages, customSystem) {
+        const sysPrompt = customSystem || systemPrompt;
+        const messagesWithSystem = [
+            { role: 'user', content: sysPrompt },
+            ...messages
+        ];
+
+        const response = await fetch(API_CONFIG.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': API_CONFIG.apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: API_CONFIG.model,
+                max_tokens: 4096,
+                messages: messagesWithSystem
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error?.message || `API错误: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return extractTextContentFromApiData(data);
+    }
+
+    async function analyzeImageWithAI(imagePayload, promptText, imageName) {
+        if (!imagePayload) return '';
+        const analysisPrompt = `你是一位医疗图片初步观察助手。请基于用户上传的患处图片，给出谨慎、客观的初步观察描述。不要下确定诊断。请按以下格式输出：\n\n**图片初步观察**\n[描述肉眼可见特征，如红肿、颜色、皮疹、破损、分布、范围等]\n\n**可能提示**\n[列出1-3种可能方向，强调仅供参考]\n\n**建议**\n[说明是否建议尽快线下就医，以及拍照局限性]\n\n如果图片不清晰或无法判断，请明确说明“图片信息有限，无法可靠判断”。用户文字补充：${promptText || '无'}`;
+
+        const resp = await fetch(API_CONFIG.baseURL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': API_CONFIG.apiKey,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: API_CONFIG.model,
+                max_tokens: 1200,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: analysisPrompt },
+                            { type: 'image', source: imagePayload }
+                        ]
+                    }
+                ]
+            })
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error?.message || `图片分析失败: ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        return extractTextContentFromApiData(data);
+    }
+
+    // ==================== 流式消息渲染 ====================
+    function createStreamBubble() {
+        const div = document.createElement('div');
+        div.className = 'msg-enter flex justify-start mb-4';
+        div.innerHTML = `<div class="max-w-[85%] px-4 py-3 rounded-2xl rounded-bl bubble-ai text-white/75 text-sm leading-relaxed"><span class="inline-block w-1.5 h-4 bg-white/30 rounded-sm align-middle ml-0.5 animate-pulse"></span></div>`;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return div;
+    }
+
+    function addToolLoadingBubble(toolName) {
+        const div = document.createElement('div');
+        div.className = 'msg-enter flex justify-start mb-4';
+        const icons = { search_department: '🏥', query_medicine: '💊', search_nearby_hospital: '📍' };
+        const labels = { search_department: '正在推荐就医科室...', query_medicine: '正在查询药品信息...', search_nearby_hospital: '正在搜索附近医院...' };
+        div.innerHTML = `<div class="max-w-[85%] px-4 py-3 rounded-2xl rounded-bl bubble-ai text-white/50 text-xs leading-relaxed flex items-center gap-2">
+            <span class="animate-spin inline-block">${icons[toolName] || '⏳'}</span>
+            <span>${labels[toolName] || '正在处理...'}</span>
+        </div>`;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return div;
+    }
+
+    async function sendMessage() {
+        const message = userInput.value.trim();
+        const hasPendingImage = !!pendingImage;
+        if (!message && !hasPendingImage) return;
+
+        if (API_CONFIG.apiKey === 'YOUR_API_KEY_HERE') {
+            addMessage('assistant', '⚠️ 请先在代码中配置您的Anthropic API密钥。');
+            return;
+        }
+
+        const plainUserMessage = message || '请结合我上传的图片做初步分析描述。';
+        const imagePayload = hasPendingImage ? pendingImage : null;
+        const imagePreview = hasPendingImage ? pendingImagePreview : '';
+        const imageMeta = hasPendingImage ? pendingImageMeta : null;
+
+        // 紧急症状检测（用户输入）
+        if (checkEmergency(plainUserMessage)) {
+            addMessage('user', plainUserMessage, imagePreview ? { imagePreview, imageName: imageMeta?.name } : {});
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            clearPendingImage();
+            showEmergencyModal();
+            return;
+        }
+
+        // 检测用户确认查附近医院
+        if (askedAboutHospital && /^(需要|是|好|可以|帮我查|查一下|找|要|嗯|行|ok|OK|好的|是的)$/.test(plainUserMessage.trim())) {
+            askedAboutHospital = false;
+            addMessage('user', plainUserMessage);
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            messageCount++;
+
+            conversationHistory.push({ role: 'user', content: plainUserMessage });
+
+            sendBtn.disabled = true;
+            const loadingBubble = addToolLoadingBubble('search_nearby_hospital');
+            const department = '综合';
+            try {
+                const toolResult = await executeTool('search_nearby_hospital', { department });
+                chatContainer.removeChild(loadingBubble);
+                const formattedResult = formatToolResult('search_nearby_hospital', toolResult);
+                addMessage('assistant', formattedResult);
+                conversationHistory.push({ role: 'assistant', content: formattedResult });
+            } catch (err) {
+                chatContainer.removeChild(loadingBubble);
+                addMessage('assistant', `⚠️ 搜索附近医院失败：${err.message || '请稍后重试'}`);
+            }
+            sendBtn.disabled = false;
+            return;
+        }
+
+        if (followUpStage === 0) {
+            symptomInfo.main = plainUserMessage;
+            followUpStage = 1;
+        }
+
+        addMessage('user', plainUserMessage, imagePreview ? { imagePreview, imageName: imageMeta?.name } : {});
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        messageCount++;
+
+        let imageAnalysisSummary = '';
+        if (imagePayload) {
+            const imageLoading = addToolLoadingBubble('query_medicine');
+            imageLoading.querySelector('span:last-child').textContent = '正在分析上传图片...';
+            try {
+                imageAnalysisSummary = await analyzeImageWithAI(imagePayload, plainUserMessage, imageMeta?.name);
+                chatContainer.removeChild(imageLoading);
+                addMessage('assistant', imageAnalysisSummary);
+            } catch {
+                chatContainer.removeChild(imageLoading);
+                imageAnalysisSummary = `图片分析未成功：当前服务暂不稳定支持图片解析。用户上传了图片（${imageMeta?.name || '未命名图片'}），请仅基于文字症状继续问诊。`;
+                addMessage('assistant', '⚠️ 当前服务未能稳定解析图片，我将先基于您的文字描述继续问诊。');
+            }
+        }
+
+        let userConversationContent = plainUserMessage;
+        if (imageAnalysisSummary) {
+            userConversationContent = `${plainUserMessage}\n\n以下是对上传图片的初步观察结果，请结合一起分析：\n${imageAnalysisSummary}`;
+        }
+
+        conversationHistory.push({ role: 'user', content: userConversationContent });
+        clearPendingImage();
+        sendBtn.disabled = true;
+
+        const bubble = createStreamBubble();
+        let fullText = '';
+        let toolCalled = false;
+
+        try {
+            const { text, toolCalls } = await callClaudeStreamWithTools(
+                conversationHistory,
+                (chunk) => {
+                    fullText += chunk;
+                    bubble.querySelector('div').innerHTML = formatMessage(fullText);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                },
+                async (toolName, toolInput, toolId) => {
+                    toolCalled = true;
+                    const loadingBubble = addToolLoadingBubble(toolName);
+                    const toolResult = await executeTool(toolName, toolInput);
+                    chatContainer.removeChild(loadingBubble);
+
+                    const formattedResult = formatToolResult(toolName, toolResult);
+                    if (toolName === 'query_medicine') {
+                        try {
+                            const medicineData = JSON.parse(toolResult);
+                            if (medicineData.found) {
+                                addMessage('assistant', '', { rawHtml: renderMedicineCard(medicineData) });
+                            } else {
+                                addMessage('assistant', formattedResult);
+                            }
+                        } catch {
+                            addMessage('assistant', formattedResult);
+                        }
+                    } else {
+                        addMessage('assistant', formattedResult);
+                    }
+
+                    // 将工具调用和结果加入历史，然后继续对话
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: [
+                            ...(fullText ? [{ type: 'text', text: fullText }] : []),
+                            { type: 'tool_use', id: toolId, name: toolName, input: toolInput }
+                        ]
+                    });
+                    conversationHistory.push({
+                        role: 'user',
+                        content: [
+                            { type: 'tool_result', tool_use_id: toolId, content: toolResult }
+                        ]
+                    });
+
+                    // AI基于工具结果继续回复
+                    const followBubble = createStreamBubble();
+                    let followText = '';
+                    let followReply = '';
+                    try {
+                        const streamResult = await callClaudeStreamWithTools(
+                            conversationHistory,
+                            (chunk) => {
+                                followText += chunk;
+                                followBubble.querySelector('div').innerHTML = formatMessage(followText);
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            },
+                            null
+                        );
+                        followReply = streamResult.text || followText;
+                    } catch {
+                        followReply = await callClaudeNonStream(conversationHistory);
+                        followBubble.querySelector('div').innerHTML = formatMessage(followReply);
+                    }
+
+                    conversationHistory.push({ role: 'assistant', content: followReply });
+                    if (checkAIUrgency(followReply)) showEmergencyModal();
+                }
+            );
+
+            if (!toolCalled) {
+                conversationHistory.push({ role: 'assistant', content: fullText });
+                if (checkAIUrgency(fullText)) showEmergencyModal();
+            }
+
+            if (followUpStage === 1 && messageCount >= 3) {
+                followUpStage = 2;
+                askedAboutHospital = true;  // 进入综合分析阶段后，下次AI回复时会询问医院
+            }
+            updateProgress();
+
+            if (messageCount >= 4) {
+                reportBtn.classList.remove('hidden');
+                reportBtn.classList.add('flex');
+            }
+        } catch (error) {
+            try {
+                let fallbackMessages = conversationHistory;
+                if (imagePayload) {
+                    fallbackMessages = [...conversationHistory];
+                    fallbackMessages[fallbackMessages.length - 1] = {
+                        role: 'user',
+                        content: `${plainUserMessage}\n\n用户上传了患处图片（文件名：${imageMeta?.name || '未命名图片'}），但当前服务未能直接解析图片。请基于文字症状给出建议，并提醒用户图片分析未成功。`
+                    };
+                }
+                const fallbackReply = await callClaudeNonStream(fallbackMessages);
+                bubble.querySelector('div').innerHTML = formatMessage(fallbackReply || '抱歉，我暂时没有收到有效回复，请稍后再试。');
+                conversationHistory[conversationHistory.length - 1] = fallbackMessages[fallbackMessages.length - 1];
+                conversationHistory.push({ role: 'assistant', content: fallbackReply || '抱歉，我暂时没有收到有效回复，请稍后再试。' });
+                if (checkAIUrgency(fallbackReply || '')) showEmergencyModal();
+
+                if (followUpStage === 1 && messageCount >= 3) {
+                    followUpStage = 2;
+                    askedAboutHospital = true;
+                }
+                updateProgress();
+
+                if (messageCount >= 4) {
+                    reportBtn.classList.remove('hidden');
+                    reportBtn.classList.add('flex');
+                }
+            } catch (fallbackError) {
+                bubble.querySelector('div').innerHTML = formatMessage(`⚠️ 出错了：${fallbackError.message || error.message}\n\n可能是中转服务响应较慢或不支持当前请求格式，请稍后再试。`);
+            }
+        } finally {
+            sendBtn.disabled = false;
+        }
+    }
+
+    // ==================== 进度条 ====================
+    function updateProgress() {
+        if (followUpStage === 1) {
+            progressBar.classList.remove('hidden');
+            const pct = Math.min(messageCount / 3 * 100, 90);
+            document.getElementById('progressFill').style.width = pct + '%';
+            document.getElementById('progressLabel').textContent =
+                messageCount < 2 ? '正在收集症状信息...' : '信息收集中，即将为您分析...';
+            document.getElementById('progressCount').textContent = `${Math.min(messageCount, 3)}/3`;
+        } else if (followUpStage === 2) {
+            progressBar.classList.remove('hidden');
+            document.getElementById('progressFill').style.width = '100%';
+            document.getElementById('progressLabel').textContent = '症状分析已完成';
+            document.getElementById('progressCount').textContent = '✓';
+            setTimeout(() => progressBar.classList.add('hidden'), 2000);
+        }
+    }
+
+    // ==================== 生成问诊报告 ====================
+    async function generateReport() {
+        saveToHistory();
+
+        const userInfoStr = `患者：${userInfo.gender || '未知'}，${userInfo.age || '未知'}岁\n既往病史：${userInfo.medicalHistory || '无'}\n过敏史：${userInfo.allergies || '无'}`;
+
+        const reportPrompt = `请根据以下完整对话记录，生成一份结构化的问诊报告。用以下格式：
+
+**一、患者信息**
+${userInfoStr}
+
+**二、症状摘要**
+[简要总结患者的所有症状描述]
+
+**三、详细问诊信息**
+- 主诉：[主要症状]
+- 部位：[具体部位]
+- 持续时间：[发病时间和持续时间]
+- 严重程度：[疼痛/不适程度]
+- 伴随症状：[其他症状]
+- 诱因：[可能的诱因]
+
+**四、图片分析说明**
+[如果用户上传过患处图片，概括图片相关描述或说明图片分析受限；如果没有则写“本次未上传图片”]
+
+**五、初步分析与AI建议**
+[根据症状分析可能的健康问题，并给出建议]
+
+**六、建议就医科室**
+- 首选科室：[xxx]
+- 备选科室：[xxx]
+- 紧急程度：[普通/建议尽早就诊/建议立即就诊]
+
+**七、注意事项**
+[居家护理、饮食、生活建议等]
+
+对话记录如下：
+${getConversationReportText()}`;
+
+        showTyping();
+
+        try {
+            const msgs = [{ role: 'user', content: reportPrompt }];
+            const report = await callClaudeAPI(msgs, '你是一位医疗报告撰写助手，请根据对话内容生成规范的问诊报告。');
+            hideTyping();
+            showReportModal(report);
+        } catch (error) {
+            hideTyping();
+            showReportModal(generateLocalReport());
+        }
+    }
+
+    function generateLocalReport() {
+        const now = new Date().toLocaleString('zh-CN');
+        const imageMention = getConversationReportText().includes('[用户上传了图片]') ? '用户上传过患处图片，图片分析可能受当前服务能力限制。' : '本次未上传图片。';
+        return `**一、患者信息**\n患者：${userInfo.gender || '未知'}，${userInfo.age || '未知'}岁\n既往病史：${userInfo.medicalHistory || '无'}\n过敏史：${userInfo.allergies || '无'}\n\n**二、症状摘要**\n${symptomInfo.main || '未记录'}\n\n**三、图片分析说明**\n${imageMention}\n\n**四、AI建议**\n- 请结合症状变化持续观察\n- 如症状加重或出现紧急情况，请立即就医\n\n**五、建议就医科室**\n- 首选科室：根据症状请咨询相关专科\n- 建议携带过往病历前往就诊\n\n**六、注意事项**\n- 注意休息，保持充足睡眠\n- 饮食清淡，多饮水\n- 如症状加重，请立即就医\n\n> 报告生成时间：${now}\n> AI报告生成失败，此为本地摘要，请以医生诊断为准。`;
+    }
+
+    function showReportModal(content) {
+        const html = formatMessage(content);
+        const now = new Date().toLocaleString('zh-CN');
+        document.getElementById('reportContent').innerHTML =
+            `<div class="text-xs text-white/30 mb-4">生成时间：${now}</div>` + html +
+            `<div class="mt-6 pt-4 border-t border-white/[0.08] text-xs text-white/40 bg-white/[0.03] rounded-lg p-3">
+                ⚠️ 本报告由AI辅助生成，仅供参考，不作为医疗诊断依据。如有健康问题，请咨询专业医生。
+            </div>`;
+        const modal = document.getElementById('reportModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    }
+
+    function closeReport() {
+        const modal = document.getElementById('reportModal');
+        modal.classList.add('hidden');
+        modal.style.display = '';
+    }
+
+    // ==================== 下载PDF ====================
+    async function downloadPDF() {
+        const contentEl = document.getElementById('reportContent');
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg> 生成中...';
+        btn.disabled = true;
+
+        try {
+            // 创建一个临时容器，设置白色背景以便PDF可读
+            const tempDiv = document.createElement('div');
+            tempDiv.style.cssText = 'position:fixed; left:-9999px; top:0; width:700px; padding:40px; background:#fff; color:#333; font-family:"Microsoft YaHei",sans-serif; font-size:14px; line-height:1.8;';
+            tempDiv.innerHTML = `
+                <h1 style="font-size:22px; font-weight:bold; margin-bottom:8px; color:#000;">AI医疗问诊报告</h1>
+                <p style="font-size:12px; color:#999; margin-bottom:24px;">生成时间：${new Date().toLocaleString('zh-CN')}</p>
+                <div style="font-size:14px; line-height:1.8; color:#333;">${contentEl.innerHTML}</div>
+                <div style="margin-top:24px; padding-top:16px; border-top:1px solid #eee; font-size:11px; color:#999;">⚠️ 本报告由AI辅助生成，仅供参考，不作为医疗诊断依据。</div>
+            `;
+            document.body.appendChild(tempDiv);
+
+            const canvas = await html2canvas(tempDiv, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+
+            document.body.removeChild(tempDiv);
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgData = canvas.toDataURL('image/png');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            if (pdfHeight <= pageHeight) {
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            } else {
+                let yOffset = 0;
+                while (yOffset < pdfHeight) {
+                    pdf.addImage(imgData, 'PNG', 0, -yOffset, pdfWidth, pdfHeight);
+                    yOffset += pageHeight;
+                    if (yOffset < pdfHeight) pdf.addPage();
+                }
+            }
+
+            pdf.save(`问诊报告_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`);
+        } catch (err) {
+            alert('PDF生成失败，请使用打印功能另存为PDF。');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    // ==================== 历史记录 ====================
+    function saveToHistory() {
+        if (conversationHistory.length < 3) return;
+
+        const sessions = getHistory();
+        const cleanMessages = conversationHistory.slice(1).map(m => ({ role: m.role, content: contentToPlainText(m.content) }));
+        const firstUserMsg = cleanMessages.find(m => m.role === 'user')?.content || '未命名对话';
+        const preview = firstUserMsg.length > 30 ? firstUserMsg.slice(0, 30) + '...' : firstUserMsg;
+
+        sessions.unshift({
+            id: currentSessionId,
+            preview: preview,
+            messages: cleanMessages,
+            timestamp: Date.now(),
+            messageCount: cleanMessages.length,
+            userInfo: { ...userInfo }
+        });
+
+        if (sessions.length > 50) sessions.length = 50;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    }
+
+    function getHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        } catch { return []; }
+    }
+
+    function toggleHistory() {
+        const panel = document.getElementById('historyPanel');
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+            renderHistory();
+            panel.classList.remove('hidden');
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function renderHistory() {
+        const sessions = getHistory();
+        const list = document.getElementById('historyList');
+
+        if (sessions.length === 0) {
+            list.innerHTML = '<p class="text-white/30 text-sm text-center py-8">暂无历史记录</p>';
+            return;
+        }
+
+        list.innerHTML = sessions.map((s, i) => {
+            const time = new Date(s.timestamp).toLocaleString('zh-CN', {
+                month: 'numeric', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+            const msgs = s.messageCount ? `${s.messageCount}条消息` : '';
+            const info = s.userInfo ? `${s.userInfo.gender || ''} ${s.userInfo.age ? s.userInfo.age + '岁' : ''}`.trim() : '';
+            return `<button onclick="loadSession(${i})"
+                class="w-full text-left p-3 rounded-xl hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] transition group">
+                <div class="flex items-start justify-between gap-2">
+                    <p class="text-sm text-white/70 font-medium leading-snug flex-1">${escHtml(s.preview)}</p>
+                    <button onclick="event.stopPropagation();deleteSession(${i})" title="删除"
+                        class="opacity-0 group-hover:opacity-100 text-white/20 hover:text-white/60 transition text-xs mt-0.5">✕</button>
+                </div>
+                <div class="flex items-center gap-2 mt-1.5 text-xs text-white/30">
+                    <span>${time}</span>
+                    ${info ? `<span>· ${info}</span>` : ''}
+                    ${msgs ? `<span>· ${msgs}</span>` : ''}
+                </div>
+            </button>`;
+        }).join('');
+    }
+
+    function loadSession(index) {
+        const sessions = getHistory();
+        const session = sessions[index];
+        if (!session) return;
+
+        toggleHistory();
+
+        // 恢复用户信息
+        if (session.userInfo) {
+            userInfo = session.userInfo;
+            document.getElementById('headerSubtitle').textContent =
+                `${userInfo.gender || ''}，${userInfo.age ? userInfo.age + '岁' : ''} · 既往病史：${userInfo.medicalHistory || '无'} · 过敏史：${userInfo.allergies || '无'}`;
+        }
+
+        systemPrompt = buildSystemPrompt();
+
+        currentSessionId = session.id;
+        conversationHistory = [{ role: 'user', content: '请记住你的角色定位。' }];
+        followUpStage = 2;
+        symptomInfo.main = session.messages.find(m => m.role === 'user')?.content || '';
+        messageCount = session.messages.filter(m => m.role === 'user').length;
+        emergencyShown = false;
+
+        chatContainer.innerHTML = '';
+        addMessage('assistant', '您好！以下是历史问诊记录的回顾。如需新问诊，请点击右上角 ✏️ 开始新对话。');
+        session.messages.forEach(m => addMessage(m.role, m.content));
+        conversationHistory.push(...session.messages);
+
+        if (messageCount >= 4) {
+            reportBtn.classList.remove('hidden');
+            reportBtn.classList.add('flex');
+        }
+    }
+
+    function deleteSession(index) {
+        const sessions = getHistory();
+        sessions.splice(index, 1);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        renderHistory();
+    }
+
+    function clearAllHistory() {
+        if (!confirm('确定要清空所有历史记录吗？此操作不可撤销。')) return;
+        localStorage.removeItem(STORAGE_KEY);
+        renderHistory();
+    }
+
+    // ==================== 新对话 ====================
+    function resetConversation() {
+        if (conversationHistory.length > 3) saveToHistory();
+        initChat();
+    }
+
+    // ==================== UI工具 ====================
+    function renderMedicineCard(data) {
+        if (!data || !data.found) return '';
+        const note = data.is_otc ? '非处方药（OTC），建议在药师指导下使用' : '处方药，请遵医嘱使用';
+        return `
+            <div class="rounded-2xl border border-white/[0.08] bg-white/[0.04] overflow-hidden">
+                <div class="px-4 py-3 border-b border-white/[0.08] bg-white/[0.03]">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-semibold text-white/95">💊 ${escHtml(data.medicine)}</div>
+                            <div class="text-[11px] text-white/40 mt-1">${escHtml(data.otc_label)} · ${escHtml(data.category)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 space-y-3 text-sm">
+                    <div>
+                        <div class="text-white/40 text-xs mb-1">用法用量</div>
+                        <div class="text-white/80">${escHtml(data.dosage)}</div>
+                    </div>
+                    <div>
+                        <div class="text-white/40 text-xs mb-1">注意事项</div>
+                        <div class="text-white/80">${escHtml(data.usage)}</div>
+                    </div>
+                    <div>
+                        <div class="text-white/40 text-xs mb-1">禁忌人群</div>
+                        <div class="text-white/80">${escHtml(data.contraindications)}</div>
+                    </div>
+                    <div>
+                        <div class="text-white/40 text-xs mb-1">常见副作用</div>
+                        <div class="text-white/80">${escHtml(data.side_effects)}</div>
+                    </div>
+                    ${data.external_summary ? `<div><div class="text-white/40 text-xs mb-1">在线资料摘要</div><div class="text-white/75">${escHtml(data.external_summary)}</div></div>` : ''}
+                    ${data.allergy_warning ? `<div class="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-300">⚠️ ${escHtml(data.allergy_warning)}</div>` : ''}
+                    <div class="rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-white/45">信息来源：${escHtml(data.source || 'AI知识库')}。${escHtml(note)}${data.external_url ? ` <a href="${data.external_url}" target="_blank" class="underline text-white/70">查看来源</a>` : ''}</div>
+                </div>
+            </div>`;
+    }
+
+    function addMessage(role, content, options = {}) {
+        if (typeof content !== 'string') {
+            if (content === null || content === undefined) content = '';
+            else if (Array.isArray(content)) content = content.map(c => typeof c === 'string' ? c : (c.text || (c.type === 'image' ? '[用户上传了图片]' : ''))).join('');
+            else if (typeof content === 'object') content = content.text || JSON.stringify(content) || '';
+            else content = String(content);
+        }
+        const isUser = role === 'user';
+        const imageHtml = options.imagePreview ? `
+            <div class="mb-3">
+                <img src="${options.imagePreview}" alt="用户上传图片" class="upload-preview">
+                ${options.imageName ? `<div class="text-[11px] mt-1 text-white/40">${escHtml(options.imageName)}</div>` : ''}
+            </div>` : '';
+        const messageBody = options.rawHtml ? options.rawHtml : formatMessage(content);
+        const div = document.createElement('div');
+        div.className = `msg-enter flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`;
+        div.innerHTML = `
+            <div class="max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed
+                ${isUser
+                    ? 'bubble-user text-white/90 rounded-br-sm'
+                    : 'bubble-ai text-white/75 rounded-bl-sm'}">
+                ${imageHtml}
+                ${messageBody}
+            </div>`;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function formatMessage(text) {
+        if (typeof text !== 'string') {
+            if (text === null || text === undefined) text = '';
+            else if (Array.isArray(text)) text = text.map(t => typeof t === 'string' ? t : (t.text || '')).join('');
+            else if (typeof text === 'object') text = text.text || JSON.stringify(text) || '';
+            else text = String(text);
+        }
+        text = escHtml(text);
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white/95">$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-white/70 underline hover:text-white/90 transition">$1</a>')
+            .replace(/&gt; (.*?)(<br>|$)/g, '<blockquote class="border-l-2 border-white/15 pl-3 my-2 text-white/40 text-xs">$1</blockquote>')
+            .replace(/\n/g, '<br>')
+            .replace(/^- (.*?)(<br>|$)/gm, '<span class="block ml-2">• $1</span>');
+    }
+
+    function escHtml(str) {
+        if (typeof str !== 'string') str = String(str || '');
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function showTyping() {
+        typingIndicator.classList.remove('hidden');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        sendBtn.disabled = true;
+    }
+
+    function hideTyping() {
+        typingIndicator.classList.add('hidden');
+        sendBtn.disabled = false;
+    }
+
+    // 页面关闭时自动保存
+    window.addEventListener('beforeunload', () => {
+        if (conversationHistory.length > 3) saveToHistory();
+    });
+    </script>
+</body>
+</html>
