@@ -83,8 +83,43 @@
         <div class="absolute inset-0" style="background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;"></div>
     </div>
 
+    <!-- ========== API密钥输入弹窗 ========== -->
+    <div id="apiKeyModal" class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0f0f0f 50%, #181818 75%, #0a0a0a 100%);">
+        <!-- 背景光晕 -->
+        <div class="absolute inset-0 pointer-events-none">
+            <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.08) 100%);"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(225deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(255,255,255,0.05) 100%);"></div>
+            <div class="absolute inset-0" style="background: linear-gradient(45deg, transparent 20%, rgba(255,255,255,0.06) 60%, transparent 100%);"></div>
+            <div class="absolute top-[-20%] right-[-15%] w-[800px] h-[800px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 30%, transparent 70%); filter: blur(60px); animation: float 10s ease-in-out infinite;"></div>
+            <div class="absolute bottom-[-15%] left-[-10%] w-[700px] h-[700px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.06) 35%, transparent 70%); filter: blur(60px); animation: float 12s ease-in-out infinite 2s;"></div>
+            <div class="absolute top-[30%] left-[10%] w-[500px] h-[500px] rounded-full" style="background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 40%, transparent 70%); filter: blur(50px); animation: float 11s ease-in-out infinite 1s;"></div>
+            <div class="absolute inset-0" style="background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;"></div>
+        </div>
+        <div class="card-dark rounded-2xl w-full max-w-md p-8 emergency-card relative z-10">
+            <div class="text-center mb-8">
+                <div class="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid rgba(255,255,255,0.1);">
+                    <svg class="w-7 h-7 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                </div>
+                <h2 class="text-xl font-semibold gradient-text">配置API密钥</h2>
+                <p class="text-sm text-white/35 mt-2">请输入您的Claude API密钥以启用问诊功能</p>
+            </div>
+            <div class="space-y-5">
+                <div>
+                    <label class="form-label block mb-1.5">API密钥 *</label>
+                    <input type="password" id="apiKeyInput" placeholder="sk-ant-..." class="form-input w-full px-3.5 py-2.5 rounded-xl text-sm">
+                    <p class="text-xs text-white/25 mt-2">密钥将安全保存在浏览器本地，不会上传到任何服务器</p>
+                </div>
+                <div id="apiKeyError" class="hidden text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"></div>
+                <button onclick="submitApiKey()" class="send-btn w-full py-3 rounded-xl text-sm font-semibold mt-2">
+                    确认并继续
+                </button>
+                <p class="text-center text-xs text-white/20 mt-1">您也可以稍后在页面右上角修改密钥</p>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 用户信息表单（问诊前） ========== -->
-    <div id="infoForm" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0f0f0f 50%, #181818 75%, #0a0a0a 100%);">
+    <div id="infoForm" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0f0f0f 50%, #181818 75%, #0a0a0a 100%);">
         <!-- 背景光晕 -->
         <div class="absolute inset-0 pointer-events-none">
             <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%, rgba(255,255,255,0.08) 100%);"></div>
@@ -170,6 +205,10 @@
                     <p class="text-xs text-white/40 mt-1" id="headerSubtitle">描述您的症状，获取专业建议</p>
                 </div>
                 <div class="flex gap-2">
+                    <button onclick="showApiKeyModal()" title="修改API密钥"
+                        class="btn-ghost w-9 h-9 rounded-lg flex items-center justify-center text-sm">
+                        🔑
+                    </button>
                     <button onclick="toggleHistory()" title="历史记录"
                         class="btn-ghost w-9 h-9 rounded-lg flex items-center justify-center text-sm">
                         📋
@@ -325,9 +364,9 @@
     <script>
     // ==================== 配置 ====================
     const API_CONFIG = {
-        baseURL: 'https://claude.ai4cn.cloud/v1/messages',
-        apiKey: 'sk-zBBe2wdaX9N3wHD0lRTgIw57jFOt3TjbeRmLeQzd72WAR7w9',
-        model: 'claude-sonnet-4-6'
+        baseURL: 'https://medical-backend-seven.vercel.app/api/chat',
+        model: 'claude-opus-4-6',
+        accessToken: 'medical2026'
     };
 
     // 高德地图配置
@@ -339,6 +378,30 @@
     const STORAGE_KEY = 'medical_consultation_history';
     const USER_INFO_KEY = 'medical_user_info';
     const MAX_ROUNDS_BEFORE_REPORT = 6;
+
+    // ==================== 后端连接初始化 ====================
+    function loadApiKey() {
+        return true;
+    }
+
+    function saveApiKey() {}
+
+    function showApiKeyModal() {
+        alert('当前版本已改为使用本地后端代理，不再需要在前端填写 API Key。');
+    }
+
+    function closeApiKeyModal() {
+        document.getElementById('apiKeyModal').classList.add('hidden');
+    }
+
+    function submitApiKey() {
+        closeApiKeyModal();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('apiKeyModal').classList.add('hidden');
+        document.getElementById('infoForm').classList.remove('hidden');
+    });
 
     // ==================== 紧急症状关键词 ====================
     const EMERGENCY_KEYWORDS = [
@@ -1201,15 +1264,14 @@ ${userBlock}
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': API_CONFIG.apiKey,
-                'anthropic-version': '2023-06-01'
+                'x-access-key': API_CONFIG.accessToken
             },
             signal: controller.signal,
             body: JSON.stringify({
                 model: API_CONFIG.model,
                 max_tokens: 4096,
-                stream: true,
-                messages: messagesWithSystem,
+                messages: messages,
+                system: systemPrompt,
                 tools: TOOLS
             })
         });
@@ -1221,49 +1283,28 @@ ${userBlock}
             throw new Error(err.error?.message || `API错误: ${response.status}`);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+        const data = await response.json();
         let fullText = '';
         let toolCalls = [];
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-                const data = trimmed.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
-                        toolCalls.push({ id: parsed.content_block.id, name: parsed.content_block.name, input: '' });
-                    } else if (parsed.type === 'content_block_delta') {
-                        if (parsed.delta?.type === 'text_delta' && parsed.delta?.text) {
-                            fullText += parsed.delta.text;
-                            onChunk(parsed.delta.text);
-                        } else if (parsed.delta?.type === 'input_json_delta' && parsed.delta?.partial_json) {
-                            if (toolCalls.length > 0) {
-                                toolCalls[toolCalls.length - 1].input += parsed.delta.partial_json;
-                            }
-                        }
-                    }
-                } catch { /* skip malformed */ }
+        if (Array.isArray(data.content)) {
+            for (const block of data.content) {
+                if (block?.type === 'text' && block.text) {
+                    fullText += block.text;
+                } else if (block?.type === 'tool_use') {
+                    toolCalls.push({ id: block.id, name: block.name, input: block.input || {} });
+                }
             }
+        } else {
+            fullText = extractTextContentFromApiData(data);
         }
 
-        // 处理工具调用
+        if (fullText && onChunk) {
+            onChunk(fullText);
+        }
+
         for (const tc of toolCalls) {
-            let input;
-            try { input = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input; }
-            catch { input = {}; }
+            const input = tc.input && typeof tc.input === 'object' ? tc.input : {};
             if (onToolCall) await onToolCall(tc.name, input, tc.id);
         }
 
@@ -1283,14 +1324,14 @@ ${userBlock}
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': API_CONFIG.apiKey,
-                'anthropic-version': '2023-06-01'
+                'x-access-key': API_CONFIG.accessToken
             },
             signal: controller.signal,
             body: JSON.stringify({
                 model: API_CONFIG.model,
                 max_tokens: 4096,
-                messages: messagesWithSystem
+                messages: messages,
+                system: systemPrompt
             })
         });
 
@@ -1307,22 +1348,18 @@ ${userBlock}
 
     async function callClaudeAPI(messages, customSystem) {
         const sysPrompt = customSystem || systemPrompt;
-        const messagesWithSystem = [
-            { role: 'user', content: sysPrompt },
-            ...messages
-        ];
 
         const response = await fetch(API_CONFIG.baseURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': API_CONFIG.apiKey,
-                'anthropic-version': '2023-06-01'
+                'x-access-key': API_CONFIG.accessToken
             },
             body: JSON.stringify({
                 model: API_CONFIG.model,
                 max_tokens: 4096,
-                messages: messagesWithSystem
+                messages: messages,
+                system: sysPrompt
             })
         });
 
@@ -1343,8 +1380,7 @@ ${userBlock}
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': API_CONFIG.apiKey,
-                'anthropic-version': '2023-06-01'
+                'x-access-key': API_CONFIG.accessToken
             },
             body: JSON.stringify({
                 model: API_CONFIG.model,
@@ -1398,11 +1434,6 @@ ${userBlock}
         const message = userInput.value.trim();
         const hasPendingImage = !!pendingImage;
         if (!message && !hasPendingImage) return;
-
-        if (API_CONFIG.apiKey === 'YOUR_API_KEY_HERE') {
-            addMessage('assistant', '⚠️ 请先在代码中配置您的Anthropic API密钥。');
-            return;
-        }
 
         const plainUserMessage = message || '请结合我上传的图片做初步分析描述。';
         const imagePayload = hasPendingImage ? pendingImage : null;
