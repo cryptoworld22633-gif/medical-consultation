@@ -365,9 +365,23 @@
     // ==================== 配置 ====================
     const API_CONFIG = {
         baseURL: 'https://medical-backend-seven.vercel.app/api/chat',
+        remoteURL: 'https://medical-backend-seven.vercel.app/api/chat',
         model: 'claude-opus-4-6',
         accessToken: 'medical2026'
     };
+
+    // 客户端唯一ID，用于用户追踪
+    const CLIENT_ID = localStorage.getItem('_client_id') || (() => { const id = 'u_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); localStorage.setItem('_client_id', id); return id; })();
+
+    // 通用 fetch 封装，自动带认证头和客户端ID
+    function apiFetch(url, options = {}) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'x-access-key': API_CONFIG.accessToken,
+            'x-client-id': CLIENT_ID
+        };
+        return fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+    }
 
     // 高德地图配置
     const AMAP_CONFIG = {
@@ -447,57 +461,58 @@
     function buildSystemPrompt() {
         let userBlock = '';
         if (userInfo.age || userInfo.gender) {
-            userBlock = `\n\n## 当前患者信息\n- 年龄：${userInfo.age || '未知'}岁\n- 性别：${userInfo.gender || '未知'}\n- 既往病史：${userInfo.medicalHistory || '无'}\n- 过敏史：${userInfo.allergies || '无'}\n\n请在分析时参考以上信息，特别注意过敏史和既往病史对症状分析的影响。\n`;
+            userBlock = `\n\n【当前患者信息】\n- 年龄：${userInfo.age || '未知'}岁\n- 性别：${userInfo.gender || '未知'}\n- 既往病史：${userInfo.medicalHistory || '无'}\n- 过敏史：${userInfo.allergies || '无'}\n\n请在分析时参考以上信息，特别注意过敏史和既往病史对症状分析的影响。\n`;
         }
-        return `你是一位专业、友善的AI医疗问诊助手。你必须严格遵守以下问诊流程：
+        return `你是一位三甲医院内科主治医师，临床经验10年以上。
 ${userBlock}
-## 可用工具
-
+【可用工具】
 你有以下工具可以在合适的时候调用：
-
-1. **search_department** — 当用户描述症状后，你可以调用此工具推荐合适的就医科室。在追问阶段或综合分析阶段均可使用。
-2. **query_medicine** — 当你判断患者可能需要用药时，调用此工具查询药品详细信息。优先从在线免费医学/百科数据源获取真实资料，不足时再结合内置知识补充。注意：只查询信息，不要开处方。
-3. **query_medical_info** — 当你需要查询疾病、症状、检查项目等医学资料时，调用此工具获取在线资料摘要。
+1. **search_department** — 当用户描述症状后，调用此工具推荐合适的就医科室
+2. **query_medicine** — 当你判断患者可能需要用药时，调用此工具查询药品详细信息
+3. **query_medical_info** — 当你需要查询疾病、症状、检查项目等医学资料时，调用此工具
 4. **search_nearby_hospital** — 此工具由系统自动调用。当用户在综合分析后回复"需要""是"等肯定答复时，系统会自动触发搜索，你不需要主动调用此工具。你只需要在综合分析回复末尾询问"需要我帮您查询附近医院吗？"即可。
 
-重要：调用工具时，先向用户说明你将要做什么，然后再调用。不要在没有上下文的情况下突然调用工具。
+重要：调用工具时，先向用户说明你将要做什么，然后再调用。
 
-## 问诊流程（必须遵守）
+【核心原则】
+你的问诊是动态的、随机应变的，不是按固定流程走：
+- 症状清晰 → 只问1个最关键的问题
+- 症状复杂模糊 → 同时问2-3个
+- 紧急情况 → 边问边给出行动指令
+- 患者表达不清 → 放慢节奏，引导描述
 
-### 第一阶段：追问（前几轮对话）
-当用户描述症状后，你**不要**直接给出诊断结论。你必须先追问以下关键信息（每次追问2-3个问题）：
+【红旗症状处理】
+遇到以下症状，立即进入紧急模式，加快问诊节奏，同步给出行动指令：
+- 胸痛+呼吸困难 → 排除心梗/肺栓塞，告知立即去医院急诊
+- 突发剧烈头痛 → 排除脑卒中，问有无肢体无力/言语障碍
+- 意识改变 → 建议立即去医院急诊
+- 大量出血 → 指导止血，建议去医院急诊
+- 症状数分钟内急剧加重 → 明确告知去医院急诊
 
-1. **具体部位** — 哪个部位不舒服？是单侧还是双侧？会放射到其他地方吗？
-2. **持续时间** — 什么时候开始的？是持续性的还是间歇性的？
-3. **严重程度** — 1-10分打几分？影响日常生活吗？
-4. **伴随症状** — 还有其他不舒服的地方吗？
-5. **诱因** — 有没有明显的原因？（受凉、劳累、饮食等）
-6. **既往病史** — 以前有过类似情况吗？有什么慢性病？
+紧急模式：语气直接果断，急诊建议只说一次，之后继续推进问诊。
 
-### 第二阶段：综合分析（信息收集完后）
-当你已经了解了足够的信息后（通常2-3轮追问后），给出综合建议，格式如下：
+【问诊逻辑】
+- 每个问题都基于上一个回答推导出来，有逻辑递进
+- 不重复问已知信息
+- 3轮内给出评估和处理方案
+- 根据既往病史调整问诊方向
 
-**📋 症状分析**
-[总结用户的症状描述]
+【给出结论】
+口语化直接说出来，不用书面格式标题。
+包含：
+- 简短说明诊断依据（1-2句，让患者理解为什么是这个判断）
+- 最可能的诊断，顺带提一下需要排除的
+- 具体用药（药名+剂量+频次）
+- 什么情况需要去医院
 
-**🔍 可能原因**
-[列出2-4种可能的常见原因，按可能性排序]
-
-**💊 建议措施**
-[居家护理和缓解建议]
-
-**🏥 就医建议**
-[建议就诊的科室和紧急程度]
-
----
-
-重要原则：
-- 语气亲切专业，用通俗语言解释
-- 不要下绝对诊断，使用"可能是""考虑"等措辞
-- 出现以下情况立即建议就医：高烧不退、剧烈疼痛、呼吸困难、意识模糊、出血不止等
-- 每次回复末尾加：_本建议仅供参考，请以医生诊断为准_
-- **【必须执行】** 当你进入第二阶段（给出综合分析建议）后，你必须在回复的最后一行加上这句话（不要加粗，作为普通文字）："需要我帮您查询附近医院吗？"
-- 如果用户回复"需要"或"是"等肯定答复，系统会自动触发医院搜索，你不需要再调用 search_nearby_hospital 工具`;
+【语气】
+- 简洁直接，不说废话
+- 不说免责声明
+- 不用"同时"、"另外"等过渡句
+- 患者焦虑时一句话安抚，立刻继续问诊
+- 口语自然，像真人医生说话
+- 急诊建议只提一次，不重复
+- 禁止说"好的"、"我已准备好"、"请问"等机械开场白，患者说症状后直接追问关键信息`;
     }
 
     let systemPrompt = buildSystemPrompt();
@@ -672,7 +687,7 @@ ${userBlock}
         currentSessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         conversationHistory = [{
             role: 'user',
-            content: '请记住你的角色定位，准备好开始问诊。'
+            content: `${userInfo.gender || '患者'}，${userInfo.age || '未知'}岁，既往病史：${userInfo.medicalHistory || '无'}，过敏史：${userInfo.allergies || '无'}。等待患者描述症状。`
         }];
         followUpStage = 0;
         symptomInfo = { main: '', location: '', duration: '', severity: '', triggers: '', other: '' };
@@ -689,7 +704,7 @@ ${userBlock}
         const greeting = userInfo.age && userInfo.gender
             ? `您好！我已了解您的基本情况（${userInfo.gender}，${userInfo.age}岁${userInfo.medicalHistory ? '，有' + userInfo.medicalHistory + '病史' : ''}${userInfo.allergies ? '，对' + userInfo.allergies + '过敏' : ''}）。请告诉我您今天哪里不舒服？`
             : '您好！我是AI医疗问诊助手。请详细描述您的症状，我会先了解您的情况，然后提供初步建议。';
-        addMessage('assistant', greeting + '\n\n⚠️ 重要提示：本助手仅供参考，不能替代专业医生的诊断。如遇紧急情况，请立即就医或拨打120。');
+        addMessage('assistant', greeting);
     }
 
     // 回车提交表单
@@ -1260,11 +1275,10 @@ ${userBlock}
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-        const response = await fetch(API_CONFIG.baseURL, {
+        const response = await apiFetch(API_CONFIG.baseURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-access-key': API_CONFIG.accessToken
             },
             signal: controller.signal,
             body: JSON.stringify({
@@ -1320,11 +1334,10 @@ ${userBlock}
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-        const response = await fetch(API_CONFIG.baseURL, {
+        const response = await apiFetch(API_CONFIG.baseURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-access-key': API_CONFIG.accessToken
             },
             signal: controller.signal,
             body: JSON.stringify({
@@ -1349,11 +1362,10 @@ ${userBlock}
     async function callClaudeAPI(messages, customSystem) {
         const sysPrompt = customSystem || systemPrompt;
 
-        const response = await fetch(API_CONFIG.baseURL, {
+        const response = await apiFetch(API_CONFIG.baseURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-access-key': API_CONFIG.accessToken
             },
             body: JSON.stringify({
                 model: API_CONFIG.model,
@@ -1376,11 +1388,10 @@ ${userBlock}
         if (!imagePayload) return '';
         const analysisPrompt = `你是一位医疗图片初步观察助手。请基于用户上传的患处图片，给出谨慎、客观的初步观察描述。不要下确定诊断。请按以下格式输出：\n\n**图片初步观察**\n[描述肉眼可见特征，如红肿、颜色、皮疹、破损、分布、范围等]\n\n**可能提示**\n[列出1-3种可能方向，强调仅供参考]\n\n**建议**\n[说明是否建议尽快线下就医，以及拍照局限性]\n\n如果图片不清晰或无法判断，请明确说明“图片信息有限，无法可靠判断”。用户文字补充：${promptText || '无'}`;
 
-        const resp = await fetch(API_CONFIG.baseURL, {
+        const resp = await apiFetch(API_CONFIG.baseURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-access-key': API_CONFIG.accessToken
             },
             body: JSON.stringify({
                 model: API_CONFIG.model,
